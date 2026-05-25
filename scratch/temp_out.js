@@ -6892,14 +6892,17 @@ let CREDITOS_REALES = [{
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (n, compact = false) => {
+  if (n === undefined || n === null || isNaN(n)) return '$0';
+  const cleanVal = Math.round(n);
   if (compact) {
-    const a = Math.abs(n);
-    if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-    if (a >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-    if (a >= 1e3) return `$${Math.round(n / 1e3)}K`;
-    return `$${n.toLocaleString('es-CL')}`;
+    const a = Math.abs(cleanVal);
+    if (a >= 1e6) return (cleanVal < 0 ? '-' : '') + '$' + (a / 1e6).toFixed(1).replace('.', ',') + ' MM';
+    if (a >= 1e3) return (cleanVal < 0 ? '-' : '') + '$' + Math.round(a / 1e3) + ' K';
+    return (cleanVal < 0 ? '-' : '') + '$' + a;
   }
-  return `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const parts = Math.abs(cleanVal).toString().split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return (cleanVal < 0 ? '-' : '') + '$' + parts.join(".");
 };
 const fmtDate = s => {
   if (!s) return '';
@@ -13928,7 +13931,7 @@ function RunwaySimulatorPage({
       },
       yaxis: {
         labels: {
-          formatter: val => fmt(val),
+          formatter: val => fmt(val, true),
           style: {
             colors: 'var(--t3)',
             fontSize: '11px'
