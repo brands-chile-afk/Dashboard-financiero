@@ -3768,6 +3768,12 @@ function AIAdvisorPage({ saldos, movRecientes }) {
   const [pregunta, setPregunta] = useState('');
   const [chatResponse, setChatResponse] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const saveApiKey = (key) => {
+    setApiKey(key);
+    localStorage.setItem('GEMINI_API_KEY', key);
+  };
 
   const totalCaja = Object.values(saldos || SALDOS_BANCO).reduce((a, b) => a + b, 0);
   const totalInversiones = FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
@@ -3816,12 +3822,142 @@ function AIAdvisorPage({ saldos, movRecientes }) {
       .trim();
   };
 
+  const buildContext = () => {
+    const refDate = getReferenceDate();
+    const activeSaldos = saldos || SALDOS_BANCO;
+    const totalBancos = Object.values(activeSaldos).reduce((a, b) => a + b, 0);
+    const activeNomina = NOMINA_DATA && NOMINA_DATA.length ? NOMINA_DATA : [];
+    
+    const activeMovs = movRecientes || MOV_RECIENTES || [];
+    const movsSummary = activeMovs.slice(0, 35).map(m => 
+      `- ${m.fecha}: ${m.descripcion} | Monto: ${m.monto} | Banco: ${m.banco}`
+    ).join("\n");
+
+    const vencidas = COB_PENDIENTES.filter(c => c.estado === 'VENCIDO');
+    const sumVencidas = vencidas.reduce((s, c) => s + c.saldo, 0);
+    const pendientes = COB_PENDIENTES.filter(c => c.estado === 'PENDIENTE');
+    const sumPendientes = pendientes.reduce((s, c) => s + c.saldo, 0);
+
+    const activeCreditos = CREDITOS_SHEETS_RAW.filter(c => c.estado !== 'Pagado');
+    const creditosSummary = activeCreditos.map(c => 
+      `- ${c.banco}: Cuota de ${c.montoPago} (Día Pago: ${c.diaPago})`
+    ).join("\n");
+
+    const activeFiniquitos = FINIQUITOS_RAW.filter(f => f.estado !== 'Pagado');
+    const finiquitosSummary = activeFiniquitos.map(f => 
+      `- ${f.trabajador} (${f.empresa}): ${f.montoPago} | Fecha: ${f.fecha}`
+    ).join("\n");
+
+    return `
+=== CONTEXTO FINANCIERO EN TIEMPO REAL (GRAFHIKA & GMD) ===
+Fecha de Corte/Referencia: ${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
+
+1. SALDOS OPERATIVOS EN BANCOS:
+Total Caja Consolidado: ${fmt(totalBancos)}
+${Object.entries(activeSaldos).map(([b, val]) => `- ${b}: ${fmt(val)}`).join("\n")}
+
+2. INVERSIONES ACTIVAS:
+Total en Fondos Mutuos (FFMM): ${fmt(totalInversiones)}
+
+3. COMPROMISOS RECURRENTES MENSUALES (EGRESOS OPERATIVOS):
+- Sueldos/Planilla de Remuneraciones: ${fmt(sueldosTotal)} (para ${activeNomina.reduce((s, e) => s + (e.personas || 1), 0)} personas)
+  Desglose de nómina por empresa:
+  ${activeNomina.map(e => `  * ${e.empresa}: ${fmt(e.monto)} (${e.personas || 1} personas)`).join("\n")}
+- Gastos Fijos de Planta (Arriendos, Seguros, etc.): ${fmt(fijosTotal)}
+- Total Egresos Recurrentes Mínimos: ${fmt(sueldosTotal + fijosTotal)}
+- Runway en cuentas corrientes: ${runwayDias} días de cobertura.
+
+4. CARTERA DE CUENTAS POR COBRAR (COBRANZA ACTIVA):
+- Cobranza ya VENCIDA (en mora): ${fmt(sumVencidas)} (${vencidas.length} facturas vencidas)
+  * Mayor Deudor Individual: ${maxDebtorName} con una deuda acumulada de ${fmt(maxDebtorVal)} (${maxDebtorPercent.toFixed(1)}% de la cartera vencida)
+- Cobranza por vencer (PENDIENTE): ${fmt(sumPendientes)}
+
+5. CRÉDITOS BANCARIOS ACTIVOS (DEUDA):
+Cuotas de este mes sumadas: ${fmt(creditosMes)}
+Desglose de cuotas vigentes:
+${creditosSummary || "- No hay créditos vigentes"}
+
+6. FINIQUITOS Y EGRESOS LABORALES EXTRAORDINARIOS:
+Total Finiquitos Pendientes este mes: ${fmt(activeFiniquitos.reduce((s, f) => s + f.montoPago, 0))}
+Desglose:
+${finiquitosSummary || "- No hay finiquitos pendientes"}
+
+7. HISTORIAL RECIENTE DE TRANSACCIONES (Últimos 35 movimientos en cartolas):
+${movsSummary}
+==========================================================
+    `;
+  };
+
+  const buildSystemPrompt = () => {
+    return `Eres un Analista Financiero de Inteligencia Artificial (AI CFO) experto para el grupo de empresas Grafhika & GMD (de Chile).
+Tu objetivo es responder de manera analítica, clara y con un tono ejecutivo las preguntas del director sobre la contabilidad de la empresa basándote en el CONTEXTO FINANCIERO EN TIEMPO REAL provisto.
+
+Reglas críticas de comportamiento:
+1. Precisión Matemática: Si la pregunta requiere sumas, filtros o comparaciones sobre los movimientos, bancos, cobranzas o sueldos, realiza los cálculos de forma rigurosa usando los datos exactos del contexto.
+2. Contexto de Fechas: La fecha actual del sistema es la "Fecha de Corte/Referencia" indicada en el contexto (usualmente mayo de 2026). A partir de esa fecha, calcula rangos de tiempo relativos (ej. "últimos 2 meses" abarca abril y mayo de 2026).
+3. Moneda: Todos los valores monetarios deben expresarse en Pesos Chilenos (CLP) con separadores de miles mediante puntos (ej. $12.955.344) y sin decimales.
+4. Estilo y Formato: Responde de forma sumamente profesional. Utiliza formato HTML para estructurar tu respuesta de manera visualmente premium (negritas con <strong>, listas con <ul> y <li>, viñetas, saltos de línea con <br>, etc.). No uses Markdown en tu respuesta final, sino HTML limpio.
+5. Transparencia: Si no dispones de datos para responder a una pregunta en el contexto, indícalo de forma educada pero directa.
+
+Recuerda: Si te pregunta sobre cuánto se le pagó o transfirió a alguien en los últimos 2 meses o períodos similares, busca palabras clave del nombre en la lista de transacciones (sección 7), suma sus montos absolutos, indica qué transacciones encontraste (fecha, descripción y monto) y detalla a qué banco corresponde.`;
+  };
+
   const executeCustomQuery = (queryInput) => {
     if (!queryInput.trim()) return;
     setIsTyping(true);
     setChatResponse(null);
 
     const query = cleanText(queryInput);
+
+    // Call Gemini API if Key is present
+    if (apiKey.trim()) {
+      const systemPrompt = buildSystemPrompt();
+      const context = buildContext();
+      const prompt = `${systemPrompt}\n\nCONTEXTO FINANCIERO:\n${context}\n\nPREGUNTA DEL USUARIO:\n${queryInput}`;
+
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.15
+          }
+        })
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Error API (${res.status})`);
+        return res.json();
+      })
+      .then(data => {
+        setIsTyping(false);
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) {
+          let cleanReply = reply.trim();
+          if (cleanReply.startsWith("```html")) {
+            cleanReply = cleanReply.slice(7);
+          }
+          if (cleanReply.endsWith("```")) {
+            cleanReply = cleanReply.slice(0, -3);
+          }
+          setChatResponse(cleanReply);
+        } else {
+          setChatResponse("No recibí una respuesta válida de Gemini Flash. Revisa tu clave API.");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setIsTyping(false);
+        setChatResponse(`<strong>Error al conectar con Gemini Flash:</strong><br><br>${err.message}<br><br><em>Nota: Se produjo un error de red o la clave API ingresada no es válida. Revisa los detalles en la consola de desarrollador o vuelve a verificar tu token.</em>`);
+      });
+
+      return;
+    }
+
     let text = '';
 
     // Predefined shortcuts from tags
@@ -4247,8 +4383,42 @@ function AIAdvisorPage({ saldos, movRecientes }) {
         {/* Consultas interactivas */}
         <div className="card" style={{display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
           <div>
-            <div className="card-hd">
-              <div><div className="card-title">Consultas Financieras del Negocio</div><div className="card-sub">Haz clic o escribe tu pregunta abajo para auditar en tiempo real</div></div>
+            <div className="card-hd" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}>
+              <div><div className="card-title">Consultas Financieras del Negocio</div><div className="card-sub">Haz clic, escribe tu pregunta o conecta Gemini Flash abajo</div></div>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <input 
+                  type={showApiKey ? "text" : "password"} 
+                  placeholder="Gemini API Key..."
+                  value={apiKey}
+                  onChange={(e)=>saveApiKey(e.target.value)}
+                  style={{
+                    padding:'4px 8px',
+                    borderRadius:5,
+                    border:'1px solid var(--border)',
+                    background:'var(--bg)',
+                    color:'var(--text)',
+                    fontFamily:'DM Sans',
+                    fontSize:11.5,
+                    width:140,
+                    outline:'none'
+                  }}
+                />
+                <button 
+                  onClick={()=>setShowApiKey(!showApiKey)}
+                  style={{
+                    background:'none',
+                    border:'none',
+                    cursor:'pointer',
+                    color:'var(--t3)',
+                    fontSize:12,
+                    display:'flex',
+                    alignItems:'center'
+                  }}
+                  title={showApiKey ? "Ocultar API Key" : "Mostrar API Key"}
+                >
+                  {showApiKey ? "👁️" : "🙈"}
+                </button>
+              </div>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div className="ai-query-suggestions">
