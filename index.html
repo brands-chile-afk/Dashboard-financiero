@@ -3848,6 +3848,20 @@ function AIAdvisorPage({ saldos, movRecientes }) {
       `- ${f.trabajador} (${f.empresa}): ${f.montoPago} | Fecha: ${f.fecha}`
     ).join("\n");
 
+    const activeGastos = GASTOS || [];
+    const gastosPendientes = activeGastos.filter(g => g.estado === 'Pendiente');
+    const sumGastosPendientes = gastosPendientes.reduce((s, g) => s + g.monto, 0);
+    const gastosPagados = activeGastos.filter(g => g.estado === 'Pagado');
+    const sumGastosPagados = gastosPagados.reduce((s, g) => s + g.monto, 0);
+
+    const gastosPendSummary = gastosPendientes.map(g => 
+      `- ${g.fecha}: ${g.descripcion} | Monto: ${fmt(g.monto)}`
+    ).join("\n");
+
+    const gastosPagSummary = gastosPagados.map(g => 
+      `- ${g.fecha}: ${g.descripcion} | Monto: ${fmt(g.monto)}`
+    ).join("\n");
+
     return `
 === CONTEXTO FINANCIERO EN TIEMPO REAL (GRAFHIKA & GMD) ===
 Fecha de Corte/Referencia: ${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -3884,6 +3898,15 @@ ${finiquitosSummary || "- No hay finiquitos pendientes"}
 
 7. HISTORIAL RECIENTE DE TRANSACCIONES (Últimos 35 movimientos en cartolas):
 ${movsSummary}
+
+8. CHEQUES Y PROYECCIÓN DE GASTOS (PAGADOS Y PENDIENTES):
+Total Egresos Proyectados / Cheques Pendientes: ${fmt(sumGastosPendientes)} (${gastosPendientes.length} cheques pendientes)
+Desglose de Cheques Pendientes (por cobrar / cobro pendiente):
+${gastosPendSummary || "- No hay cheques pendientes"}
+
+Total Egresos / Cheques ya PAGADOS: ${fmt(sumGastosPagados)} (${gastosPagados.length} cheques pagados)
+Desglose de Cheques ya Pagados (cobrados / efectuados):
+${gastosPagSummary || "- No hay cheques pagados"}
 ==========================================================
     `;
   };
@@ -3893,13 +3916,15 @@ ${movsSummary}
 Tu objetivo es responder de manera analítica, clara y con un tono ejecutivo las preguntas del director sobre la contabilidad de la empresa basándote en el CONTEXTO FINANCIERO EN TIEMPO REAL provisto.
 
 Reglas críticas de comportamiento:
-1. Precisión Matemática: Si la pregunta requiere sumas, filtros o comparaciones sobre los movimientos, bancos, cobranzas o sueldos, realiza los cálculos de forma rigurosa usando los datos exactos del contexto.
+1. Precisión Matemática: Si la pregunta requiere sumas, filtros o comparaciones sobre los movimientos, bancos, cobranzas, sueldos o cheques proyectados/pagados, realiza los cálculos de forma rigurosa usando los datos exactos del contexto.
 2. Contexto de Fechas: La fecha actual del sistema es la "Fecha de Corte/Referencia" indicada en el contexto (usualmente mayo de 2026). A partir de esa fecha, calcula rangos de tiempo relativos (ej. "últimos 2 meses" abarca abril y mayo de 2026).
 3. Moneda: Todos los valores monetarios deben expresarse en Pesos Chilenos (CLP) con separadores de miles mediante puntos (ej. $12.955.344) y sin decimales.
 4. Estilo y Formato: Responde de forma sumamente profesional. Utiliza formato HTML para estructurar tu respuesta de manera visualmente premium (negritas con <strong>, listas con <ul> y <li>, viñetas, saltos de línea con <br>, etc.). No uses Markdown en tu respuesta final, sino HTML limpio.
 5. Transparencia: Si no dispones de datos para responder a una pregunta en el contexto, indícalo de forma educada pero directa.
 
-Recuerda: Si te pregunta sobre cuánto se le pagó o transfirió a alguien en los últimos 2 meses o períodos similares, busca palabras clave del nombre en la lista de transacciones (sección 7), suma sus montos absolutos, indica qué transacciones encontraste (fecha, descripción y monto) y detalla a qué banco corresponde.`;
+Recuerda: 
+- Si te pregunta sobre cuánto se le pagó o transfirió a alguien en los últimos 2 meses o períodos similares, busca palabras clave del nombre en la lista de transacciones (sección 7), suma sus montos absolutos, indica qué transacciones encontraste (fecha, descripción y monto) y detalla a qué banco corresponde.
+- Si te pregunta sobre la "proyección" de gastos o sobre los "cheques pagados" o "cheques pendientes", consulta la Sección 8 del contexto ("CHEQUES Y PROYECCIÓN DE GASTOS"). Suma o detalla los elementos correspondientes de esta sección y responde detalladamente indicando fechas, beneficiarios (descripción) y montos.`;
   };
 
   const executeCustomQuery = (queryInput) => {
@@ -4264,6 +4289,37 @@ Recuerda: Si te pregunta sobre cuánto se le pagó o transfirió a alguien en lo
         No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"${searchedTerms}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en el historial'}.<br><br>
         • <strong>Sugerencia</strong>: Asegúrate de escribir el nombre o razón social correcto (por ejemplo, <em>"Brandon Villarroel"</em>, <em>"Jaime"</em>, o <em>"Poliplas"</em>).`;
       }
+    }
+    // 7.5 CHEQUES Y PROYECCIONES
+    else if (
+      query.includes("cheque") ||
+      query.includes("cheques") ||
+      query.includes("proyeccion") ||
+      query.includes("proyecciones") ||
+      query.includes("proyectado") ||
+      query.includes("proyectados")
+    ) {
+      const activeGastos = GASTOS || [];
+      const pendientes = activeGastos.filter(g => g.estado === 'Pendiente');
+      const pagados = activeGastos.filter(g => g.estado === 'Pagado');
+      const totalPend = pendientes.reduce((s, g) => s + g.monto, 0);
+      const totalPag = pagados.reduce((s, g) => s + g.monto, 0);
+
+      const listPend = pendientes.slice(0, 8)
+        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
+        .join('<br>');
+
+      const listPag = pagados.slice(0, 8)
+        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
+        .join('<br>');
+
+      text = `<strong>Control y Proyección de Cheques (Gastos Proyectados):</strong><br><br>
+      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>${fmt(totalPend)}</strong> (${pendientes.length} cheques por cobrar).<br>
+      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>${fmt(totalPag)}</strong> (${pagados.length} cheques cobrados).<br>
+      • <strong>Total Cartera de Proyección</strong>: <strong>${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
+      ${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>${listPend}<br><br>` : ''}
+      ${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>${listPag}<br><br>` : ''}
+      <em>Análisis de Proyección: La cartera de cheques representa los compromisos adquiridos con proveedores en base a la facturación proyectada.</em>`;
     }
     // 8. GASTOS FIJOS / GASTOS GENERALES
     else if (
