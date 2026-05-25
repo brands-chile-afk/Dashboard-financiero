@@ -13907,6 +13907,15 @@ function RunwaySimulatorPage({
         }
       },
       colors: ['var(--blue)'],
+      dataLabels: {
+        enabled: true,
+        formatter: val => fmt(val),
+        style: {
+          fontSize: '9px',
+          fontFamily: 'DM Sans, sans-serif',
+          fontWeight: 600
+        }
+      },
       stroke: {
         curve: 'smooth',
         width: 3
