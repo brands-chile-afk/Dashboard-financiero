@@ -4039,7 +4039,97 @@ function AIAdvisorPage({ saldos, movRecientes }) {
       ${breakdown}<br><br>
       <em>Sugerencia: Estos egresos son de alta prioridad legal. Asegura los saldos o utiliza la línea de crédito si los flujos de cobranza se retrasan.</em>`;
     }
-    // 7. GASTOS FIJOS / GASTOS GENERALES
+    // 7. TRASPASOS / PAGOS / TRANSFERENCIAS PERSONALIZADOS (e.g. Brandon Villarroel)
+    else if (
+      query.includes("transferi") || 
+      query.includes("transfiri") || 
+      query.includes("transferencia") || 
+      query.includes("transferencias") || 
+      query.includes("traspas") || 
+      query.includes("traspaso") || 
+      query.includes("traspasos") || 
+      query.includes("pago") || 
+      query.includes("pagos") || 
+      query.includes("pagar") ||
+      query.includes("pagamos")
+    ) {
+      let days = 60; // default to 60 days
+      let hasExplicitTimeframe = false;
+      const matchDias = query.match(/(\d+)\s*dia/);
+      const matchMeses = query.match(/(\d+)\s*mes/);
+      if (matchDias) {
+        days = parseInt(matchDias[1], 10);
+        hasExplicitTimeframe = true;
+      } else if (matchMeses) {
+        days = parseInt(matchMeses[1], 10) * 30;
+        hasExplicitTimeframe = true;
+      } else if (query.includes("quince")) {
+        days = 15;
+        hasExplicitTimeframe = true;
+      } else if (query.includes("una semana") || query.includes("1 semana") || query.includes("7 dias")) {
+        days = 7;
+        hasExplicitTimeframe = true;
+      } else if (query.includes("mes") && !query.includes("meses")) {
+        days = 30;
+        hasExplicitTimeframe = true;
+      }
+
+      const refDate = getReferenceDate();
+      const startDateLimit = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - days, 12, 0, 0);
+
+      const activeMovs = movRecientes || MOV_RECIENTES || [];
+      const dateFilteredMovs = activeMovs.filter(m => {
+        if (!m.fecha) return false;
+        const d = new Date(m.fecha + 'T12:00:00');
+        if (hasExplicitTimeframe) {
+          return d >= startDateLimit && d <= refDate;
+        }
+        return true; // Search all if no timeframe is specified
+      });
+
+      const stopwords = ['cuanto', 'se', 'le', 'transfirio', 'transferio', 'transferir', 'transfiri', 'durante', 'los', 'ultimos', 'ultimo', 'mes', 'meses', 'dia', 'dias', 'quince', 'semana', 'semanas', 'este', 'esta', 'del', 'con', 'para', 'por', 'una', 'uno', 'unos', 'unas', 'que', 'quien', 'quienes', 'aqui', 'alla', 'hacer', 'hemos', 'tiene', 'tienen', 'habia', 'total', 'suma', 'pesos', 'clp', 'a', 'de', 'le', 'la', 'lo', 'las', 'los', 'un', 'el', 'en', 'y', 'o', 'u', 'e', 'al', 'del', 'pago', 'pagos', 'pagamos', 'pagar', 'traspaso', 'traspasos', 'transferencia', 'transferencias', 'movimiento', 'movimientos', 'gasto', 'gastos', 'egreso', 'egresos', 'ingreso', 'ingresos'];
+      
+      const words = query.split(/\s+/).map(w => cleanText(w)).filter(w => w.length >= 3 && !stopwords.includes(w));
+
+      let matchedMovs = [];
+      if (words.length > 0) {
+        matchedMovs = dateFilteredMovs.filter(m => {
+          if (!m.descripcion) return false;
+          const desc = cleanText(m.descripcion);
+          return words.some(word => desc.includes(word));
+        });
+      }
+
+      if (words.length > 0 && matchedMovs.length > 0) {
+        const sumTransfers = matchedMovs.reduce((s, m) => s + Math.abs(m.monto), 0);
+        const countTransfers = matchedMovs.length;
+
+        const bankGroup = {};
+        matchedMovs.forEach(m => {
+          bankGroup[m.banco] = (bankGroup[m.banco] || 0) + Math.abs(m.monto);
+        });
+        const bankBreakdown = Object.entries(bankGroup)
+          .map(([bank, val]) => `• <strong>${bank}</strong>: ${fmt(val)}`)
+          .join('<br>');
+
+        const listDetails = matchedMovs.slice(0, 10)
+          .map(m => `• <strong>${m.fecha}</strong>: ${m.descripcion} - <strong>${fmt(Math.abs(m.monto))}</strong> (${m.banco})`)
+          .join('<br>');
+
+        text = `<strong>Auditoría de Transferencias y Pagos Realizados:</strong><br><br>
+        Se han identificado <strong>${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"${words.join(', ')}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en todo el historial disponible'}:<br><br>
+        • <strong>Monto total transferido</strong>: <strong>${fmt(sumTransfers)}</strong>.<br><br>
+        <strong>Desglose por Entidad Bancaria:</strong><br>${bankBreakdown}<br><br>
+        <strong>Movimientos detectados (hasta 10):</strong><br>${listDetails}<br><br>
+        <em>Análisis: Estos egresos corresponden a transferencias bancarias directas y cobros registrados en tus cartolas.</em>`;
+      } else {
+        const searchedTerms = words.length > 0 ? words.join(', ') : 'términos vacíos';
+        text = `<strong>Consulta de Transferencias / Pagos:</strong><br><br>
+        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"${searchedTerms}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en el historial'}.<br><br>
+        • <strong>Sugerencia</strong>: Asegúrate de escribir el nombre o razón social correcto (por ejemplo, <em>"Brandon Villarroel"</em>, <em>"Jaime"</em>, o <em>"Poliplas"</em>).`;
+      }
+    }
+    // 8. GASTOS FIJOS / GASTOS GENERALES
     else if (
       query.includes("gasto") ||
       query.includes("gastos") ||
