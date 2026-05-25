@@ -1,0 +1,17 @@
+{
+  "name": "dashboard-financiero",
+  "version": "1.0.0",
+  "description": "Dashboard financiero premium en tiempo real conectado con Google Sheets",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx -y lite-server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/cli": "^7.28.6",
+    "@babel/core": "^7.29.0",
+    "@babel/preset-react": "^7.28.5"
+  }
+}
