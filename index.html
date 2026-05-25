@@ -3768,7 +3768,7 @@ function AIAdvisorPage({ saldos, movRecientes }) {
   const [pregunta, setPregunta] = useState('');
   const [chatResponse, setChatResponse] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyCGmePPRezwaEkm26gMWfm6NsDv44d0rQI');
   const [showApiKey, setShowApiKey] = useState(false);
   const saveApiKey = (key) => {
     setApiKey(key);
