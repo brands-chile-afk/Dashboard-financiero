@@ -13788,6 +13788,7 @@ function RunwaySimulatorPage({
   movRecientes
 }) {
   const [probabilidad, setProbabilidad] = useState(80);
+  const [plazo, setPlazo] = useState('12m'); // '15d', '1m', '2m', '3m', '6m', '12m'
   const [incluirFfmm, setIncluirFfmm] = useState(false);
   const [incluirSueldos, setIncluirSueldos] = useState(true);
   const [incluirCreditos, setIncluirCreditos] = useState(true);
@@ -13799,19 +13800,17 @@ function RunwaySimulatorPage({
   const totalInversiones = FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
   const currentCash = totalCaja + (incluirFfmm ? totalInversiones : 0);
 
-  // Proyección de 12 meses
+  // Proyección de plazos dinámicos (Diario vs Mensual)
   const {
     monthsLabels,
     projectedBalances,
     timelineData
   } = useMemo(() => {
-    let startYear = 2026;
-    let startMonth = 4; // Mayo (0-indexed 4)
+    let startDate = new Date();
     if (movList.length > 0 && movList[0].fecha) {
-      const d = new Date(movList[0].fecha);
+      const d = new Date(movList[0].fecha + 'T12:00:00');
       if (!isNaN(d.getTime())) {
-        startYear = d.getFullYear();
-        startMonth = d.getMonth();
+        startDate = d;
       }
     }
     const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -13820,68 +13819,136 @@ function RunwaySimulatorPage({
     const tableRows = [];
     let currentBalance = currentCash;
     const probFactor = probabilidad / 100;
+    const isDaily = plazo === '15d' || plazo === '1m';
+    const numSteps = plazo === '15d' ? 15 : plazo === '1m' ? 30 : plazo === '2m' ? 2 : plazo === '3m' ? 3 : plazo === '6m' ? 6 : 12;
 
-    // Sueldos y costos fijos mensuales
+    // Sueldos y costos fijos mensuales (usados en modo mensual)
     const sueldosMensual = incluirSueldos ? NOMINA_DATA.reduce((s, e) => s + e.monto, 0) : 0;
     const fijosMensual = incluirFijos ? GASTOS_FIJOS_DATA.reduce((s, f) => s + f.monto, 0) : 0;
-    for (let m = 0; m < 12; m++) {
-      const projDate = new Date(startYear, startMonth + m, 15);
-      const mLabel = `${monthsNames[projDate.getMonth()]} ${projDate.getFullYear()}`;
-      labels.push(mLabel);
-      const targetMonth = projDate.getMonth();
-      const targetYear = projDate.getFullYear();
+    if (isDaily) {
+      for (let i = 1; i <= numSteps; i++) {
+        const projDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i, 12, 0, 0);
+        const mLabel = projDate.toLocaleDateString('es-CL', {
+          day: '2-digit',
+          month: 'short'
+        });
+        labels.push(mLabel);
 
-      // 1. Cobranza vencida este mes
-      const cobranzasMes = COB_PENDIENTES.filter(c => {
-        if (c.estado !== 'VENCIDO' || !c.vencimiento) return false;
-        const d = new Date(c.vencimiento);
-        return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
-      });
-      const cobranzaRawSum = cobranzasMes.reduce((s, c) => s + c.saldo, 0);
-      const cobranzaProyectada = Math.round(cobranzaRawSum * probFactor);
+        // 1. Cobranza vencida este día
+        const cobranzasDia = COB_PENDIENTES.filter(c => {
+          if (c.estado !== 'VENCIDO' || !c.vencimiento) return false;
+          const d = new Date(c.vencimiento + 'T12:00:00');
+          return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
+        });
+        const cobranzaRawSum = cobranzasDia.reduce((s, c) => s + c.saldo, 0);
+        const cobranzaProyectada = Math.round(cobranzaRawSum * probFactor);
 
-      // 2. Gastos Variables
-      const gastosMes = incluirGastos ? GASTOS.filter(g => {
-        if (g.estado === 'PAGADO' || !g.fecha) return false;
-        const d = new Date(g.fecha);
-        return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
-      }).reduce((s, g) => s + g.monto, 0) : 0;
+        // 2. Gastos Variables este día
+        const gastosDia = incluirGastos ? GASTOS.filter(g => {
+          if (g.estado === 'PAGADO' || !g.fecha) return false;
+          const d = new Date(g.fecha + 'T12:00:00');
+          return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
+        }).reduce((s, g) => s + g.monto, 0) : 0;
 
-      // 3. Créditos
-      const creditosMes = incluirCreditos ? CREDITOS_SHEETS_RAW.filter(c => {
-        if (c.estado === 'Pagado' || !c.fecha) return false;
-        const d = new Date(c.fecha);
-        return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
-      }).reduce((s, c) => s + c.montoPago, 0) : 0;
+        // 3. Créditos este día
+        const creditosDia = incluirCreditos ? CREDITOS_SHEETS_RAW.filter(c => {
+          if (c.estado === 'Pagado' || !c.fecha) return false;
+          const d = new Date(c.fecha + 'T12:00:00');
+          return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
+        }).reduce((s, c) => s + c.montoPago, 0) : 0;
 
-      // 4. Finiquitos
-      const finiquitosMes = incluirFiniquitos ? FINIQUITOS_RAW.filter(f => {
-        if (f.estado === 'Pagado' || !f.fecha) return false;
-        const d = new Date(f.fecha);
-        return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
-      }).reduce((s, f) => s + f.montoPago, 0) : 0;
-      const totalEgresosMes = sueldosMensual + fijosMensual + creditosMes + finiquitosMes + gastosMes;
-      const saldoInicial = currentBalance;
-      const flujoNeto = cobranzaProyectada - totalEgresosMes;
-      currentBalance += flujoNeto;
-      balances.push(currentBalance);
-      tableRows.push({
-        label: mLabel,
-        inicial: saldoInicial,
-        cobros: cobranzaProyectada,
-        egresos: fijosMensual + gastosMes + finiquitosMes,
-        nomina: sueldosMensual,
-        creditos: creditosMes,
-        flujo: flujoNeto,
-        final: currentBalance
-      });
+        // 4. Finiquitos este día
+        const finiquitosDia = incluirFiniquitos ? FINIQUITOS_RAW.filter(f => {
+          if (f.estado === 'Pagado' || !f.fecha) return false;
+          const d = new Date(f.fecha + 'T12:00:00');
+          return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
+        }).reduce((s, f) => s + f.montoPago, 0) : 0;
+
+        // 5. Sueldos este día (si el día de la fecha es el 30 del mes)
+        const isSueldosDay = projDate.getDate() === 30;
+        const sueldosDia = incluirSueldos && isSueldosDay ? NOMINA_DATA.reduce((s, e) => s + e.monto, 0) : 0;
+
+        // 6. Gastos Fijos este día
+        const fijosDia = incluirFijos ? GASTOS_FIJOS_DATA.filter(g => g.dia_pago === projDate.getDate()).reduce((s, f) => s + f.monto, 0) : 0;
+        const totalEgresosMes = sueldosDia + fijosDia + creditosDia + finiquitosDia + gastosDia;
+        const saldoInicial = currentBalance;
+        const flujoNeto = cobranzaProyectada - totalEgresosMes;
+        currentBalance += flujoNeto;
+        balances.push(currentBalance);
+        tableRows.push({
+          label: mLabel,
+          inicial: saldoInicial,
+          cobros: cobranzaProyectada,
+          egresos: fijosDia + gastosDia + finiquitosDia,
+          nomina: sueldosDia,
+          creditos: creditosDia,
+          flujo: flujoNeto,
+          final: currentBalance
+        });
+      }
+    } else {
+      // Modo Mensual
+      const startYear = startDate.getFullYear();
+      const startMonth = startDate.getMonth();
+      for (let m = 0; m < numSteps; m++) {
+        const projDate = new Date(startYear, startMonth + m, 15, 12, 0, 0);
+        const mLabel = `${monthsNames[projDate.getMonth()]} ${projDate.getFullYear()}`;
+        labels.push(mLabel);
+        const targetMonth = projDate.getMonth();
+        const targetYear = projDate.getFullYear();
+
+        // 1. Cobranza vencida este mes
+        const cobranzasMes = COB_PENDIENTES.filter(c => {
+          if (c.estado !== 'VENCIDO' || !c.vencimiento) return false;
+          const d = new Date(c.vencimiento + 'T12:00:00');
+          return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+        });
+        const cobranzaRawSum = cobranzasMes.reduce((s, c) => s + c.saldo, 0);
+        const cobranzaProyectada = Math.round(cobranzaRawSum * probFactor);
+
+        // 2. Gastos Variables
+        const gastosMes = incluirGastos ? GASTOS.filter(g => {
+          if (g.estado === 'PAGADO' || !g.fecha) return false;
+          const d = new Date(g.fecha + 'T12:00:00');
+          return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+        }).reduce((s, g) => s + g.monto, 0) : 0;
+
+        // 3. Créditos
+        const creditosMes = incluirCreditos ? CREDITOS_SHEETS_RAW.filter(c => {
+          if (c.estado === 'Pagado' || !c.fecha) return false;
+          const d = new Date(c.fecha + 'T12:00:00');
+          return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+        }).reduce((s, c) => s + c.montoPago, 0) : 0;
+
+        // 4. Finiquitos
+        const finiquitosMes = incluirFiniquitos ? FINIQUITOS_RAW.filter(f => {
+          if (f.estado === 'Pagado' || !f.fecha) return false;
+          const d = new Date(f.fecha + 'T12:00:00');
+          return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+        }).reduce((s, f) => s + f.montoPago, 0) : 0;
+        const totalEgresosMes = sueldosMensual + fijosMensual + creditosMes + finiquitosMes + gastosMes;
+        const saldoInicial = currentBalance;
+        const flujoNeto = cobranzaProyectada - totalEgresosMes;
+        currentBalance += flujoNeto;
+        balances.push(currentBalance);
+        tableRows.push({
+          label: mLabel,
+          inicial: saldoInicial,
+          cobros: cobranzaProyectada,
+          egresos: fijosMensual + gastosMes + finiquitosMes,
+          nomina: sueldosMensual,
+          creditos: creditosMes,
+          flujo: flujoNeto,
+          final: currentBalance
+        });
+      }
     }
     return {
       monthsLabels: labels,
       projectedBalances: balances,
       timelineData: tableRows
     };
-  }, [currentCash, probabilidad, incluirFfmm, incluirSueldos, incluirCreditos, incluirFijos, incluirFiniquitos, incluirGastos, movList]);
+  }, [currentCash, probabilidad, incluirFfmm, incluirSueldos, incluirCreditos, incluirFijos, incluirFiniquitos, incluirGastos, movList, plazo]);
 
   // Primer mes con déficit
   const firstDeficit = useMemo(() => {
@@ -14001,6 +14068,41 @@ function RunwaySimulatorPage({
       borderTop: '1px solid var(--border)'
     }
   }), /*#__PURE__*/React.createElement("div", {
+    className: "sim-group",
+    style: {
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sim-label"
+  }, "Plazo de Proyecci\xF3n"), /*#__PURE__*/React.createElement("select", {
+    style: {
+      padding: '6px 10px',
+      fontSize: '12.5px',
+      border: '1px solid var(--border)',
+      borderRadius: '7px',
+      background: 'var(--bg)',
+      color: 'var(--text)',
+      fontFamily: 'DM Sans',
+      outline: 'none',
+      width: '100%',
+      cursor: 'pointer',
+      marginTop: '4px'
+    },
+    value: plazo,
+    onChange: e => setPlazo(e.target.value)
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "15d"
+  }, "15 D\xEDas (Diario)"), /*#__PURE__*/React.createElement("option", {
+    value: "1m"
+  }, "1 Mes (Diario)"), /*#__PURE__*/React.createElement("option", {
+    value: "2m"
+  }, "2 Meses (Mensual)"), /*#__PURE__*/React.createElement("option", {
+    value: "3m"
+  }, "3 Meses (Mensual)"), /*#__PURE__*/React.createElement("option", {
+    value: "6m"
+  }, "6 Meses (Mensual)"), /*#__PURE__*/React.createElement("option", {
+    value: "12m"
+  }, "12 Meses (Mensual)"))), /*#__PURE__*/React.createElement("div", {
     className: "sim-group"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sim-label"
@@ -14088,14 +14190,14 @@ function RunwaySimulatorPage({
     className: "sim-summary-box"
   }, /*#__PURE__*/React.createElement("div", {
     className: "sim-label"
-  }, "Saldo Proyectado a 12m"), /*#__PURE__*/React.createElement("div", {
+  }, "Saldo Proyectado a ", plazo === '15d' ? '15d' : plazo === '1m' ? '1m' : `${plazo.slice(0, -1)}m`), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 18,
       fontWeight: 700,
-      color: timelineData[11].final >= 0 ? 'var(--g600)' : 'var(--red)',
+      color: timelineData[timelineData.length - 1].final >= 0 ? 'var(--g600)' : 'var(--red)',
       marginTop: 4
     }
-  }, fmt(timelineData[11].final))), /*#__PURE__*/React.createElement("div", {
+  }, fmt(timelineData[timelineData.length - 1].final))), /*#__PURE__*/React.createElement("div", {
     className: "sim-summary-box",
     style: {
       background: firstDeficit ? 'var(--red-bg)' : 'oklch(95% .03 145)',
@@ -14125,7 +14227,7 @@ function RunwaySimulatorPage({
     className: "card-hd"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "card-title"
-  }, "Runway de Caja Proyectado a 12 Meses"), /*#__PURE__*/React.createElement("div", {
+  }, "Runway de Caja Proyectado a ", plazo === '15d' ? '15 Días' : plazo === '1m' ? '1 Mes' : `${plazo.slice(0, -1)} Meses`), /*#__PURE__*/React.createElement("div", {
     className: "card-sub"
   }, "Simulaci\xF3n basada en flujos netos org\xE1nicos reales"))), /*#__PURE__*/React.createElement("div", {
     id: "chart-runway-proyeccion",
@@ -14141,7 +14243,7 @@ function RunwaySimulatorPage({
     className: "card-hd"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "card-title"
-  }, "Detalle Matem\xE1tico Mensual"), /*#__PURE__*/React.createElement("div", {
+  }, plazo === '15d' || plazo === '1m' ? 'Detalle Matemático Diario' : 'Detalle Matemático Mensual'), /*#__PURE__*/React.createElement("div", {
     className: "card-sub"
   }, "Ecuaci\xF3n de flujo: Saldo Inicial + Cobros - Egresos = Saldo Final"))), /*#__PURE__*/React.createElement("table", {
     className: "tbl",
