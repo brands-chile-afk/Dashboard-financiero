@@ -3768,7 +3768,7 @@ function AIAdvisorPage({ saldos, movRecientes }) {
   const [pregunta, setPregunta] = useState('');
   const [chatResponse, setChatResponse] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyCGmePPRezwaEkm26gMWfm6NsDv44d0rQI');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyBtSZRpBnkfBaCzxkeFptH9qTpu609JK70');
   const [showApiKey, setShowApiKey] = useState(false);
   const saveApiKey = (key) => {
     setApiKey(key);
@@ -3915,7 +3915,7 @@ Recuerda: Si te pregunta sobre cuánto se le pagó o transfirió a alguien en lo
       const context = buildContext();
       const prompt = `${systemPrompt}\n\nCONTEXTO FINANCIERO:\n${context}\n\nPREGUNTA DEL USUARIO:\n${queryInput}`;
 
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
