@@ -3927,87 +3927,32 @@ Recuerda:
 - Si te pregunta sobre la "proyección" de gastos o sobre los "cheques pagados" o "cheques pendientes", consulta la Sección 8 del contexto ("CHEQUES Y PROYECCIÓN DE GASTOS"). Suma o detalla los elementos correspondientes de esta sección y responde detalladamente indicando fechas, beneficiarios (descripción) y montos.`;
   };
 
-  const executeCustomQuery = (queryInput) => {
-    if (!queryInput.trim()) return;
-    setIsTyping(true);
-    setChatResponse(null);
-
-    const query = cleanText(queryInput);
-
-    // Call Gemini API if Key is present
-    if (apiKey.trim()) {
-      const systemPrompt = buildSystemPrompt();
-      const context = buildContext();
-      const prompt = `${systemPrompt}\n\nCONTEXTO FINANCIERO:\n${context}\n\nPREGUNTA DEL USUARIO:\n${queryInput}`;
-
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.15
-          }
-        })
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Error API (${res.status})`);
-        return res.json();
-      })
-      .then(data => {
-        setIsTyping(false);
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) {
-          let cleanReply = reply.trim();
-          if (cleanReply.startsWith("```html")) {
-            cleanReply = cleanReply.slice(7);
-          }
-          if (cleanReply.endsWith("```")) {
-            cleanReply = cleanReply.slice(0, -3);
-          }
-          setChatResponse(cleanReply);
-        } else {
-          setChatResponse("No recibí una respuesta válida de Gemini Flash. Revisa tu clave API.");
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        setIsTyping(false);
-        setChatResponse(`<strong>Error al conectar con Gemini Flash:</strong><br><br>${err.message}<br><br><em>Nota: Se produjo un error de red o la clave API ingresada no es válida. Revisa los detalles en la consola de desarrollador o vuelve a verificar tu token.</em>`);
-      });
-
-      return;
-    }
-
+  const runOfflineQuery = (query, queryInput, errorMsg = "") => {
     let text = '';
 
     // Predefined shortcuts from tags
     if (query === 'diagnostico') {
       text = `<strong>Diagnóstico de Salud Financiera:</strong><br><br>
       La situación financiera del grupo se cataloga como <strong>Sólida con Atención en Cartera</strong>.<br><br>
-      • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
-      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>${fmt(sueldosTotal)}</strong> y gastos fijos de <strong>${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>${fmt(sueldosTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
+      • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>\${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
+      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>\${fmt(sueldosTotal)}</strong> y gastos fijos de <strong>\${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>\${fmt(sueldosTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
       • <strong>Relación GMD & Grafhika:</strong> El sistema ha detectado y aislado los movimientos inter-compañías entre las empresas hermanas (incluyendo traspasos directos y TEFs recurrentes). Estos flujos internos han sido completamente excluidos de las métricas de ingresos y egresos de caja para entregar un análisis de rentabilidad orgánico y libre de doble contabilidad.<br>
       • <strong>Riesgo:</strong> El simulador muestra que, en caso de que la cobranza caiga al 50% de efectividad, la caja operativa podría contraerse considerablemente en los próximos 6 meses si no se cuenta con retiros de tus fondos de inversión.`;
     } else if (query === 'riesgo-clientes') {
       text = `<strong>Análisis de Cartera y Clientes Críticos:</strong><br><br>
-      La cobranza total pendiente en estado VENCIDO suma un total de <strong>${fmt(cobranzaVencida)}</strong>.<br><br>
-      • <strong>Mayor Deudor Individual:</strong> La empresa <strong>${maxDebtorName}</strong> adeuda un saldo neto de <strong>${fmt(maxDebtorVal)}</strong>, concentrando un preocupante <strong>${maxDebtorPercent.toFixed(1)}%</strong> del riesgo total de tu cartera de cobro.<br>
+      La cobranza total pendiente en estado VENCIDO suma un total de <strong>\${fmt(cobranzaVencida)}</strong>.<br><br>
+      • <strong>Mayor Deudor Individual:</strong> La empresa <strong>\${maxDebtorName}</strong> adeuda un saldo neto de <strong>\${fmt(maxDebtorVal)}</strong>, concentrando un preocupante <strong>\${maxDebtorPercent.toFixed(1)}%</strong> del riesgo total de tu cartera de cobro.<br>
       • <strong>Gestión Directa:</strong> Se aconseja iniciar contacto preventivo inmediato.<br>
       • <strong>Alternativa de Liquidez:</strong> Ceder estos folios vencidos de clientes corporativos triple-A a factoring inyectará caja de inmediato reduciendo el costo de cobranza judicial.`;
     } else if (query === 'runway-analisis') {
       text = `<strong>Análisis Detallado de Runway y Nómina:</strong><br><br>
-      Tus egresos recurrentes de planta mensuales son de <strong>${fmt(sueldosTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
-      • <strong>Remuneraciones Consolidadas:</strong> <strong>${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
-      • <strong>Gastos Fijos Operativos:</strong> <strong>${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
-      Tu runway de caja es de aproximadamente <strong>${(totalCaja / (sueldosTotal + fijosTotal)).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
+      Tus egresos recurrentes de planta mensuales son de <strong>\${fmt(sueldosTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
+      • <strong>Remuneraciones Consolidadas:</strong> <strong>\${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
+      • <strong>Gastos Fijos Operativos:</strong> <strong>\${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
+      Tu runway de caja es de aproximadamente <strong>\${(totalCaja / (sueldosTotal + fijosTotal)).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>\${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
     } else if (query === 'estrategia-90') {
       text = `<strong>Recomendaciones Estratégicas para los Próximos 90 Días:</strong><br><br>
-      1. <strong>Campaña Preferencial sobre ${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
+      1. <strong>Campaña Preferencial sobre \${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>\${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
       2. <strong>Rentabilización de Caja Inactiva</strong>: Mantienes saldos de cuenta corriente ociosos. Recomendamos traspasar excedentes a Fondos Mutuos de rescate inmediato para generar retornos sin asumir riesgos corporativos.<br>
       3. <strong>Planificación ante Vencimientos</strong>: Las cuotas de créditos se concentran a inicios del mes (día 4 y día 13). Asegurar que las cuentas corrientes tengan saldo suficiente al menos 48h hábiles antes para evitar sobregiros automáticos y cargos de interés comercial.`;
     } 
@@ -4026,12 +3971,12 @@ Recuerda:
       const activeSaldos = saldos || SALDOS_BANCO;
       const totalBancos = Object.values(activeSaldos).reduce((a, b) => a + b, 0);
       const breakdown = Object.entries(activeSaldos)
-        .map(([banco, monto]) => `• <strong>${banco}</strong>: ${fmt(monto)}`)
+        .map(([banco, monto]) => `• <strong>\${banco}</strong>: \${fmt(monto)}`)
         .join("<br>");
 
       text = `<strong>Resumen de Saldos Bancarios y Liquidez Inmediata:</strong><br><br>
-      Dispones de un saldo de caja consolidado de <strong>${fmt(totalBancos)}</strong> en tus cuentas corrientes.<br><br>
-      <strong>Desglose por Entidad Bancaria:</strong><br>${breakdown}<br><br>
+      Dispones de un saldo de caja consolidado de <strong>\${fmt(totalBancos)}</strong> en tus cuentas corrientes.<br><br>
+      <strong>Desglose por Entidad Bancaria:</strong><br>\${breakdown}<br><br>
       <em>Nota: Esta liquidez te entrega una base robusta para la cobertura de egresos. No incluye tus fondos de inversión en FFMM.</em>`;
     }
     // 2. NOMINA / SUELDOS
@@ -4054,22 +3999,22 @@ Recuerda:
       let breakdown = "";
       if (activeNomina.length > 0) {
         breakdown = "<strong>Desglose por Empresa:</strong><br>" + activeNomina
-          .map(e => `• <strong>${e.empresa}</strong>: ${fmt(e.monto)} (${e.personas || 1} personas)`)
+          .map(e => `• <strong>\${e.empresa}</strong>: \${fmt(e.monto)} (\${e.personas || 1} personas)`)
           .join("<br>");
       } else {
         const fallbackNom = (typeof SUELDOS_DATA !== 'undefined' && SUELDOS_DATA.length) 
           ? SUELDOS_DATA.reduce((s, f) => s + f.monto, 0)
           : 0;
         if (fallbackNom > 0) {
-          breakdown = `• Nómina estimada de planta (Google Sheets): <strong>${fmt(fallbackNom)}</strong>`;
+          breakdown = `• Nómina estimada de planta (Google Sheets): <strong>\${fmt(fallbackNom)}</strong>`;
         } else {
           breakdown = "<em>No se registra nómina cargada en el sistema para este período.</em>";
         }
       }
 
       text = `<strong>Análisis de Nómina y Remuneraciones del Período:</strong><br><br>
-      Este mes se registra un egreso acumulado de <strong>${fmt(totalSueldos || sueldosTotal)}</strong> para el pago de remuneraciones, cubriendo a un total estimado de <strong>${totalPersonas || 1}</strong> colaboradores.<br><br>
-      ${breakdown}<br><br>
+      Este mes se registra un egreso acumulado de <strong>\${fmt(totalSueldos || sueldosTotal)}</strong> para el pago de remuneraciones, cubriendo a un total estimado de <strong>\${totalPersonas || 1}</strong> colaboradores.<br><br>
+      \${breakdown}<br><br>
       <em>Recomendación: La nómina de sueldos constituye tu mayor compromiso de egreso fijo recurrente. Asegurar saldo suficiente el día 30 en cuentas operativas.</em>`;
     }
     // 3. COBRANZAS / CUENTAS POR COBRAR / RECEIVABLES
@@ -4121,16 +4066,16 @@ Recuerda:
       const topDebtors = Object.entries(debtors)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
-        .map(([name, val]) => `• <strong>${name}</strong>: ${fmt(val)}`)
+        .map(([name, val]) => `• <strong>\${name}</strong>: \${fmt(val)}`)
         .join("<br>");
 
-      text = `<strong>Auditoría de Cuentas por Cobrar (Próximos ${days} días):</strong><br><br>
-      El sistema proyecta el siguiente panorama de cobranza desde el día de corte (<strong>${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>):<br><br>
-      • <strong>Cobranza por vencer (próximos ${days} días)</strong>: <strong>${fmt(sumPorVencer)}</strong> (${porVencer.length} facturas activas).<br>
-      • <strong>Cobranza ya VENCIDA (mora acumulada)</strong>: <strong>${fmt(sumVencidas)}</strong> (${vencidas.length} facturas vencidas).<br>
-      • <strong>Cuentas por cobrar totales disponibles</strong>: <strong>${fmt(sumVencidas + sumPorVencer)}</strong>.<br><br>
-      ${topDebtors.length > 0 ? `<strong>Clientes clave con vencimientos en este período:</strong><br>${topDebtors}<br><br>` : ''}
-      <em>Estrategia: Un total de ${fmt(sumPorVencer)} está programado para entrar en caja de forma natural. Se aconseja un seguimiento preventivo 5 días antes de cada vencimiento crítico.</em>`;
+      text = `<strong>Auditoría de Cuentas por Cobrar (Próximos \${days} días):</strong><br><br>
+      El sistema proyecta el siguiente panorama de cobranza desde el día de corte (<strong>\${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>):<br><br>
+      • <strong>Cobranza por vencer (próximos \${days} días)</strong>: <strong>\${fmt(sumPorVencer)}</strong> (\${porVencer.length} facturas activas).<br>
+      • <strong>Cobranza ya VENCIDA (mora acumulada)</strong>: <strong>\${fmt(sumVencidas)}</strong> (\${vencidas.length} facturas vencidas).<br>
+      • <strong>Cuentas por cobrar totales disponibles</strong>: <strong>\${fmt(sumVencidas + sumPorVencer)}</strong>.<br><br>
+      \${topDebtors.length > 0 ? `<strong>Clientes clave con vencimientos en este período:</strong><br>\${topDebtors}<br><br>` : ''}
+      <em>Estrategia: Un total de \${fmt(sumPorVencer)} está programado para entrar en caja de forma natural. Se aconseja un seguimiento preventivo 5 días antes de cada vencimiento crítico.</em>`;
     }
     // 4. FONDOS MUTUOS / INVERSIONES
     else if (
@@ -4142,7 +4087,7 @@ Recuerda:
     ) {
       const activeFondos = FONDOS && FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
       text = `<strong>Auditoría de Fondos de Inversión y Excedentes:</strong><br><br>
-      Mantienes una cartera activa de Fondos Mutuos valorizada en <strong>${fmt(activeFondos || totalInversiones)}</strong>.<br><br>
+      Mantienes una cartera activa de Fondos Mutuos valorizada en <strong>\${fmt(activeFondos || totalInversiones)}</strong>.<br><br>
       • <strong>Rol del Portafolio:</strong> Estos fondos actúan como reserva líquida de contingencia y generan retornos diarios sobre tus excedentes.<br>
       • <strong>Facilidad de Rescate:</strong> Dado su carácter de rescate en 24/48 horas, se consideran caja de respaldo inmediata frente a caídas drásticas de facturación.<br><br>
       <em>Recomendación: En caso de requerir caja para cubrir finiquitos imprevistos o cuotas de créditos, realizar rescates parciales para no sobregirar las cuentas operativas.</em>`;
@@ -4164,16 +4109,16 @@ Recuerda:
       let breakdown = "";
       if (activeCreditos.length > 0) {
         breakdown = "<strong>Créditos activos contratados:</strong><br>" + activeCreditos
-          .map(c => `• <strong>${c.banco}</strong>: Cuota de ${fmt(c.montoPago)} (Vence el día ${c.diaPago || 'N/A'})`)
+          .map(c => `• <strong>\${c.banco}</strong>: Cuota de \${fmt(c.montoPago)} (Vence el día \${c.diaPago || 'N/A'})`)
           .join("<br>");
       } else {
         breakdown = "<em>No se registran créditos bancarios pendientes de pago para este período.</em>";
       }
 
       text = `<strong>Estado de Créditos Bancarios y Compromisos Financieros:</strong><br><br>
-      Este mes debes cubrir un total de <strong>${fmt(totalCuotaMes || creditosMes)}</strong> en cuotas de créditos bancarios activos.<br><br>
-      ${breakdown}<br><br>
-      • <strong>Saldo Pendiente Estimado de Deuda Bancaria</strong>: <strong>${fmt(outstandingSum)}</strong>.<br><br>
+      Este mes debes cubrir un total de <strong>\${fmt(totalCuotaMes || creditosMes)}</strong> en cuotas de créditos bancarios activos.<br><br>
+      \${breakdown}<br><br>
+      • <strong>Saldo Pendiente Estimado de Deuda Bancaria</strong>: <strong>\${fmt(outstandingSum)}</strong>.<br><br>
       <em>Nota: Las cuotas de amortización representan un egreso de caja ineludible. Asegurar liquidez en las cuentas corrientes correspondientes en sus días de vencimiento.</em>`;
     }
     // 6. FINIQUITOS
@@ -4189,15 +4134,15 @@ Recuerda:
       let breakdown = "";
       if (activeFiniquitos.length > 0) {
         breakdown = "<strong>Detalle de Finiquitos Pendientes:</strong><br>" + activeFiniquitos
-          .map(f => `• <strong>${f.trabajador || 'Trabajador'}</strong> (${f.empresa || 'Empresa'}): ${fmt(f.montoPago)} - Vencimiento: ${f.fecha || 'N/A'}`)
+          .map(f => `• <strong>\${f.trabajador || 'Trabajador'}</strong> (\${f.empresa || 'Empresa'}): \${fmt(f.montoPago)} - Vencimiento: \${f.fecha || 'N/A'}`)
           .join("<br>");
       } else {
         breakdown = "<em>No se registran finiquitos ni indemnizaciones pendientes de pago para este mes.</em>";
       }
 
       text = `<strong>Reporte de Finiquitos y Compromisos Laborales Extraordinarios:</strong><br><br>
-      El total por pagar por concepto de finiquitos y salidas extraordinarias de personal este mes es de <strong>${fmt(sumFiniquitos)}</strong>.<br><br>
-      ${breakdown}<br><br>
+      El total por pagar por concepto de finiquitos y salidas extraordinarias de personal este mes es de <strong>\${fmt(sumFiniquitos)}</strong>.<br><br>
+      \${breakdown}<br><br>
       <em>Sugerencia: Estos egresos son de alta prioridad legal. Asegura los saldos o utiliza la línea de crédito si los flujos de cobranza se retrasan.</em>`;
     }
     // 7. TRASPASOS / PAGOS / TRANSFERENCIAS PERSONALIZADOS (e.g. Brandon Villarroel)
@@ -4270,23 +4215,24 @@ Recuerda:
           bankGroup[m.banco] = (bankGroup[m.banco] || 0) + Math.abs(m.monto);
         });
         const bankBreakdown = Object.entries(bankGroup)
-          .map(([bank, val]) => `• <strong>${bank}</strong>: ${fmt(val)}`)
+          .map(([bank, val]) => `• <strong>
+\${bank}</strong>: \${fmt(val)}`)
           .join('<br>');
 
         const listDetails = matchedMovs.slice(0, 10)
-          .map(m => `• <strong>${m.fecha}</strong>: ${m.descripcion} - <strong>${fmt(Math.abs(m.monto))}</strong> (${m.banco})`)
+          .map(m => `• <strong>\${m.fecha}</strong>: \${m.descripcion} - <strong>\${fmt(Math.abs(m.monto))}</strong> (\${m.banco})`)
           .join('<br>');
 
         text = `<strong>Auditoría de Transferencias y Pagos Realizados:</strong><br><br>
-        Se han identificado <strong>${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"${words.join(', ')}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en todo el historial disponible'}:<br><br>
-        • <strong>Monto total transferido</strong>: <strong>${fmt(sumTransfers)}</strong>.<br><br>
-        <strong>Desglose por Entidad Bancaria:</strong><br>${bankBreakdown}<br><br>
-        <strong>Movimientos detectados (hasta 10):</strong><br>${listDetails}<br><br>
+        Se han identificado <strong>\${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"\${words.join(', ')}"</em>)\${hasExplicitTimeframe ? ` en los últimos \${days} días` : ' en todo el historial disponible'}:<br><br>
+        • <strong>Monto total transferido</strong>: <strong>\${fmt(sumTransfers)}</strong>.<br><br>
+        <strong>Desglose por Entidad Bancaria:</strong><br>\${bankBreakdown}<br><br>
+        <strong>Movimientos detectados (hasta 10):</strong><br>\${listDetails}<br><br>
         <em>Análisis: Estos egresos corresponden a transferencias bancarias directas y cobros registrados en tus cartolas.</em>`;
       } else {
         const searchedTerms = words.length > 0 ? words.join(', ') : 'términos vacíos';
         text = `<strong>Consulta de Transferencias / Pagos:</strong><br><br>
-        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"${searchedTerms}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en el historial'}.<br><br>
+        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"\${searchedTerms}"</em>)\${hasExplicitTimeframe ? ` en los últimos \${days} días` : ' en el historial'}.<br><br>
         • <strong>Sugerencia</strong>: Asegúrate de escribir el nombre o razón social correcto (por ejemplo, <em>"Brandon Villarroel"</em>, <em>"Jaime"</em>, o <em>"Poliplas"</em>).`;
       }
     }
@@ -4306,19 +4252,19 @@ Recuerda:
       const totalPag = pagados.reduce((s, g) => s + g.monto, 0);
 
       const listPend = pendientes.slice(0, 8)
-        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
+        .map(g => `• <strong>\${g.fecha}</strong>: \${g.descripcion} - <strong>\${fmt(g.monto)}</strong>`)
         .join('<br>');
 
       const listPag = pagados.slice(0, 8)
-        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
+        .map(g => `• <strong>\${g.fecha}</strong>: \${g.descripcion} - <strong>\${fmt(g.monto)}</strong>`)
         .join('<br>');
 
       text = `<strong>Control y Proyección de Cheques (Gastos Proyectados):</strong><br><br>
-      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>${fmt(totalPend)}</strong> (${pendientes.length} cheques por cobrar).<br>
-      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>${fmt(totalPag)}</strong> (${pagados.length} cheques cobrados).<br>
-      • <strong>Total Cartera de Proyección</strong>: <strong>${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
-      ${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>${listPend}<br><br>` : ''}
-      ${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>${listPag}<br><br>` : ''}
+      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>\${fmt(totalPend)}</strong> (\${pendientes.length} cheques por cobrar).<br>
+      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>\${fmt(totalPag)}</strong> (\${pagados.length} cheques cobrados).<br>
+      • <strong>Total Cartera de Proyección</strong>: <strong>\${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
+      \${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>\${listPend}<br><br>` : ''}
+      \${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>\${listPag}<br><br>` : ''}
       <em>Análisis de Proyección: La cartera de cheques representa los compromisos adquiridos con proveedores en base a la facturación proyectada.</em>`;
     }
     // 8. GASTOS FIJOS / GASTOS GENERALES
@@ -4335,11 +4281,11 @@ Recuerda:
       const variableGastos = GASTOS.filter(g => g.estado !== 'PAGADO').reduce((s, g) => s + g.monto, 0);
 
       text = `<strong>Análisis Consolidado de Egresos y Gastos Operativos:</strong><br><br>
-      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>${fmt(totalSueldos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
-      • <strong>Remuneraciones (Sueldos)</strong>: <strong>${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
-      • <strong>Gastos Fijos Operativos</strong>: <strong>${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
-      • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>${fmt(variableGastos)}</strong>.<br><br>
-      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>${fmt(totalSueldos + fijosTotal)}</strong>.</em>`;
+      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>\${fmt(totalSueldos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
+      • <strong>Remuneraciones (Sueldos)</strong>: <strong>\${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
+      • <strong>Gastos Fijos Operativos</strong>: <strong>\${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
+      • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>\${fmt(variableGastos)}</strong>.<br><br>
+      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>\${fmt(totalSueldos + fijosTotal)}</strong>.</em>`;
     }
     // 8. FALLBACK / GENERAL RECOMMENDATIONS
     else {
@@ -4355,6 +4301,72 @@ Recuerda:
       Prueba escribiendo alguna de ellas en la barra de consulta inferior.`;
     }
 
+    if (errorMsg) {
+      text = `<div style="padding: 10px 14px; background: oklch(96% .04 70); border: 1px solid oklch(86% .08 70); border-radius: 8px; font-size: 11.5px; margin-bottom: 14px; color: oklch(45% .15 70); font-family: 'DM Sans', sans-serif;">⚠️ <strong>Modo offline temporal:</strong> No se pudo conectar a Gemini Flash (\${errorMsg}). Respondiendo con el motor local offline.</div>\${text}`;
+    }
+
+    return text;
+  };
+
+  const executeCustomQuery = (queryInput) => {
+    if (!queryInput.trim()) return;
+    setIsTyping(true);
+    setChatResponse(null);
+
+    const query = cleanText(queryInput);
+
+    // Call Gemini API if Key is present
+    if (apiKey.trim()) {
+      const systemPrompt = buildSystemPrompt();
+      const context = buildContext();
+      const prompt = `\${systemPrompt}\n\nCONTEXTO FINANCIERO:\n\${context}\n\nPREGUNTA DEL USUARIO:\n\${queryInput}`;
+
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\${apiKey.trim()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.15
+          }
+        })
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Error API (\${res.status})`);
+        return res.json();
+      })
+      .then(data => {
+        setIsTyping(false);
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) {
+          let cleanReply = reply.trim();
+          if (cleanReply.startsWith("```html")) {
+            cleanReply = cleanReply.slice(7);
+          }
+          if (cleanReply.endsWith("```")) {
+            cleanReply = cleanReply.slice(0, -3);
+          }
+          setChatResponse(cleanReply);
+        } else {
+          throw new Error("Respuesta vacía o inválida");
+        }
+      })
+      .catch(err => {
+        console.error("Gemini Flash failed, running offline fallback:", err);
+        const fallbackText = runOfflineQuery(query, queryInput, err.message);
+        setIsTyping(false);
+        setChatResponse(fallbackText);
+      });
+
+      return;
+    }
+
+    // Si no hay API Key, ejecutar offline directamente
+    const text = runOfflineQuery(query, queryInput);
     setTimeout(() => {
       setIsTyping(false);
       setChatResponse(text);
