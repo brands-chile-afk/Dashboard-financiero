@@ -4,7 +4,7 @@
   "description": "Dashboard financiero premium en tiempo real conectado con Google Sheets",
   "main": "index.html",
   "scripts": {
-    "start": "npx -y lite-server"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",

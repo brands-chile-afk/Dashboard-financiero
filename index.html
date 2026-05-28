@@ -9,6 +9,10 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<!-- Firebase SDKs Compat (Requeridos para Dashboard portable) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -358,7 +362,133 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 <body>
 <div id="root"></div>
 <script type="text/babel">
+// ── Parámetro de Rescate Cloud ──
+if (window.location.search.includes('clear_cloud=true')) {
+  localStorage.removeItem('FIREBASE_CONFIG');
+  window.location.href = window.location.origin + window.location.pathname;
+}
+
 const {useState,useEffect,useMemo} = React;
+
+// ── CONFIGURACIÓN DE FIREBASE DIRECTA (HARDCODED) ──
+// Reemplaza los valores de este objeto con las credenciales de tu proyecto de Firebase
+// para que el Dashboard esté conectado desde el inicio y los usuarios entren directamente con su Gmail.
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBk3ogFG3wffplD8nwM6M1JGnYtm_edpbg",
+  authDomain: "dashboard-93457.firebaseapp.com",
+  projectId: "dashboard-93457",
+  storageBucket: "dashboard-93457.firebasestorage.app",
+  messagingSenderId: "207789889083",
+  appId: "1:207789889083:web:3577dda47c14abc9e42e1e"
+};
+
+// ── Variables Globales de Firebase ──
+let firebaseApp = null;
+let db = null;
+let firebaseUnsubscribe = null;
+
+const getSavedFirebaseConfig = () => {
+  // 1. Usar la configuración directa si ya configuraste tus datos reales
+  if (DEFAULT_FIREBASE_CONFIG && DEFAULT_FIREBASE_CONFIG.apiKey !== "TU_API_KEY_REAL" && DEFAULT_FIREBASE_CONFIG.projectId !== "tu-proyecto") {
+    return DEFAULT_FIREBASE_CONFIG;
+  }
+  // 2. Fallback a LocalStorage para flexibilidad/desarrollo
+  try {
+    const saved = localStorage.getItem('FIREBASE_CONFIG');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error('Error al parsear FIREBASE_CONFIG:', e);
+  }
+  return null;
+};
+
+const isFirebaseAvailable = () => {
+  return typeof firebase !== 'undefined' && getSavedFirebaseConfig() !== null;
+};
+
+const initFirebaseInstance = (onUserChanged, onSyncData) => {
+  if (typeof firebase === 'undefined') {
+    console.warn("Firebase SDK no cargado.");
+    return null;
+  }
+  const config = getSavedFirebaseConfig();
+  if (!config) {
+    console.log("No se encontró configuración de Firebase en LocalStorage.");
+    return null;
+  }
+
+  try {
+    if (firebase.apps.length === 0) {
+      firebaseApp = firebase.initializeApp(config);
+    } else {
+      firebaseApp = firebase.app();
+    }
+    db = firebase.firestore();
+    console.log("🔥 Firebase inicializado con éxito.");
+
+    firebase.auth().onAuthStateChanged((user) => {
+      onUserChanged(user);
+      if (user) {
+        startRealtimeSync(user.uid, onSyncData);
+      } else {
+        if (firebaseUnsubscribe) {
+          firebaseUnsubscribe();
+          firebaseUnsubscribe = null;
+        }
+      }
+    });
+
+    return firebaseApp;
+  } catch (error) {
+    console.error("Error al conectar Firebase:", error);
+    return null;
+  }
+};
+
+const startRealtimeSync = (uid, onSyncData) => {
+  if (!db) return;
+  if (firebaseUnsubscribe) firebaseUnsubscribe();
+
+  firebaseUnsubscribe = db.collection("users").doc(uid).onSnapshot((doc) => {
+    if (doc.exists) {
+      const cloudData = doc.data() || {};
+      onSyncData(cloudData);
+    } else {
+      const initialTemplate = {
+        settings: { theme: 'light', currency: 'CLP', geminiApiKey: '' },
+        umbrales: {
+          minCajaConsolidada: 20000000,
+          maxDiasVencimientoCobranza: 30,
+          minRunwayDias: 90,
+          diasAlertaVencimientoCreditos: 7
+        },
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      db.collection("users").doc(uid).set(initialTemplate, { merge: true });
+    }
+  }, (error) => {
+    console.error("Error en sincronización en tiempo real:", error);
+  });
+};
+
+const saveConfigToCloud = async (settings, umbrales, customData = {}) => {
+  const user = firebase.auth().currentUser;
+  if (!user || !db) return;
+
+  try {
+    const updateObject = {
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...customData
+    };
+    if (settings) updateObject.settings = settings;
+    if (umbrales) updateObject.umbrales = umbrales;
+
+    await db.collection("users").doc(user.uid).set(updateObject, { merge: true });
+    console.log("☁️ Respaldado en Firebase Cloud.");
+  } catch (error) {
+    console.error("Error al guardar en Firebase:", error);
+  }
+};
 
 function isIntercompanyTransfer(description) {
   if (!description) return false;
@@ -521,18 +651,138 @@ const IC = ({n,s=18}) => {
     ref:<path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>,
     not:<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></>,
     fin:<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    cld:<><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></>,
   };
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{m[n]}</svg>;
 };
 
 // ── Pages ─────────────────────────────────────────────────────────────────
 // ── Movimientos Table with Filters ───────────────────────────────────────
-function MovimientosTable({ movRecientes } = {}) {
+function MovimientosTable({ 
+  movRecientes, 
+  saldos,
+  manualAdjustments, 
+  setManualAdjustments, 
+  reconciliations, 
+  setReconciliations, 
+  logAuditEvent, 
+  saveConfigToCloud,
+  fbUser 
+}) {
   const [busqueda, setBusqueda] = useState('');
   const [filtroBanco, setFiltroBanco] = useState('Todos');
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [filtroFecha, setFiltroFecha] = useState('');
-  const bancos = ['Todos', ...Object.keys(SALDOS_BANCO)];
+  const bancos = ['Todos', ...Object.keys(saldos || SALDOS_BANCO)];
+
+  // Estados del Modal de Ajuste Provisorio
+  const [showAddAdjModal, setShowAddAdjModal] = useState(false);
+  const [newAdjDesc, setNewAdjDesc] = useState('');
+  const [newAdjMonto, setNewAdjMonto] = useState('');
+  const [newAdjTipo, setNewAdjTipo] = useState('INGRESO');
+  const [newAdjBanco, setNewAdjBanco] = useState('BancoChile');
+  const [newAdjFecha, setNewAdjFecha] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Estados del Drawer de Bitácora / Conciliación
+  const [selectedMov, setSelectedMov] = useState(null);
+  const [commentInput, setCommentInput] = useState('');
+  const [reconcileStatus, setReconcileStatus] = useState('Pendiente');
+
+  // Helper de clave única para transacciones
+  const getMovKey = (m) => {
+    if (m.isProvisional) return m.id;
+    return `${m.fecha}_${m.descripcion}_${m.monto}_${m.banco}`;
+  };
+
+  const handleAddAdjustment = async (e) => {
+    e.preventDefault();
+    if (!newAdjDesc || !newAdjMonto) {
+      alert("⚠️ Por favor completa la descripción y el monto.");
+      return;
+    }
+    const montoNum = Math.abs(parseInt(newAdjMonto.replace(/\./g, '')) || 0);
+    const newAdj = {
+      id: 'adj_' + Date.now(),
+      fecha: newAdjFecha,
+      descripcion: newAdjDesc,
+      monto: newAdjTipo === 'INGRESO' ? montoNum : -montoNum,
+      tipo: newAdjTipo,
+      banco: newAdjBanco,
+      isProvisional: true,
+      creadoPor: fbUser ? (fbUser.displayName || fbUser.email) : 'Usuario Local',
+      creadoEn: new Date().toISOString()
+    };
+    
+    const updated = [newAdj, ...manualAdjustments];
+    setManualAdjustments(updated);
+    
+    if (fbUser) {
+      await saveConfigToCloud(null, null, { manualAdjustments: updated });
+      await logAuditEvent(`Registró ajuste provisional: "${newAdjDesc}" por $${fmt(montoNum)} en ${newAdjBanco}`, 'ajuste');
+    } else {
+      localStorage.setItem('MANUAL_ADJUSTMENTS', JSON.stringify(updated));
+    }
+    
+    setNewAdjDesc('');
+    setNewAdjMonto('');
+    setShowAddAdjModal(false);
+    alert("✅ Movimiento provisional registrado y consolidado con éxito.");
+  };
+
+  const handleDeleteAdjustment = async (id, desc, monto) => {
+    if (confirm(`¿Estás seguro de que deseas eliminar este movimiento provisional?\n\n"${desc}" por $${fmt(monto)}`)) {
+      const updated = manualAdjustments.filter(adj => adj.id !== id);
+      setManualAdjustments(updated);
+      
+      if (fbUser) {
+        await saveConfigToCloud(null, null, { manualAdjustments: updated });
+        await logAuditEvent(`Eliminó ajuste provisional: "${desc}" por $${fmt(monto)}`, 'ajuste');
+      } else {
+        localStorage.setItem('MANUAL_ADJUSTMENTS', JSON.stringify(updated));
+      }
+    }
+  };
+
+  const handleOpenCommentDrawer = (m) => {
+    setSelectedMov(m);
+    const existing = reconciliations[getMovKey(m)];
+    if (existing) {
+      setCommentInput(existing.observacion || '');
+      setReconcileStatus(existing.estado || 'Pendiente');
+    } else {
+      setCommentInput('');
+      setReconcileStatus('Pendiente');
+    }
+  };
+
+  const handleSaveComment = async () => {
+    if (!selectedMov) return;
+    const key = getMovKey(selectedMov);
+    const updatedRecs = { ...reconciliations };
+    
+    if (!commentInput && reconcileStatus === 'Pendiente') {
+      delete updatedRecs[key];
+    } else {
+      updatedRecs[key] = {
+        observacion: commentInput,
+        estado: reconcileStatus,
+        autor: fbUser ? (fbUser.displayName || fbUser.email) : 'Usuario Local',
+        fecha: new Date().toISOString()
+      };
+    }
+    
+    setReconciliations(updatedRecs);
+    
+    if (fbUser) {
+      await saveConfigToCloud(null, null, { reconciliations: updatedRecs });
+      await logAuditEvent(`Actualizó conciliación de: "${selectedMov.descripcion}" a [${reconcileStatus}]`, 'conciliacion');
+    } else {
+      localStorage.setItem('RECONCILIATIONS', JSON.stringify(updatedRecs));
+    }
+    
+    setSelectedMov(null);
+    alert("✅ Observación / Conciliación guardada con éxito.");
+  };
 
   // Obtener movRecientes desde las props (o el contexto) de forma reactiva
   const movRecientesList = movRecientes || MOV_RECIENTES;
@@ -541,7 +791,10 @@ function MovimientosTable({ movRecientes } = {}) {
       // Ignorar traspasos internos si se filtra por ingreso/gasto real
       if (m.isIntercompany && filtroTipo !== 'Todos') return false;
       
-      if (filtroTipo !== 'Todos' && m.tipo !== filtroTipo) return false;
+      if (filtroTipo !== 'Todos') {
+        const signMatch = filtroTipo === 'INGRESO' ? m.monto > 0 : m.monto < 0;
+        if (!signMatch) return false;
+      }
       if (filtroBanco !== 'Todos' && m.banco !== filtroBanco) return false;
       if (filtroFecha && !m.fecha.startsWith(filtroFecha)) return false;
       if (busqueda && !m.descripcion.toLowerCase().includes(busqueda.toLowerCase())) return false;
@@ -561,8 +814,29 @@ function MovimientosTable({ movRecientes } = {}) {
   return (
     <div className="card">
       <div className="card-hd">
-        <div><div className="card-title">Movimientos Recientes</div><div className="card-sub">{filtrados.length} resultado{filtrados.length!==1?'s':''} · Total: <span style={{fontWeight:600,color:totalFiltrado>=0?'var(--g600)':'var(--red)'}}>{totalFiltrado>=0?'+':''}{fmt(totalFiltrado)}</span></div></div>
-        <button className="card-act"><IC n="exp" s={12}/> Exportar</button>
+        <div>
+          <div className="card-title">Movimientos Recientes</div>
+          <div className="card-sub">
+            {filtrados.length} resultado{filtrados.length!==1?'s':''} · Total: <span style={{fontWeight:600,color:totalFiltrado>=0?'var(--g600)':'var(--red)'}}>{totalFiltrado>=0?'+':''}{fmt(totalFiltrado)}</span>
+          </div>
+        </div>
+        
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button 
+            onClick={() => setShowAddAdjModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%)',
+              color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px',
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans',
+              display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 3px 8px rgba(37,99,235,0.25)',
+              transition: 'transform 0.2s'
+            }}
+            className="btn-hover-scale"
+          >
+            ➕ Ajuste Provisorio
+          </button>
+          <button className="card-act"><IC n="exp" s={12}/> Exportar</button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -591,17 +865,54 @@ function MovimientosTable({ movRecientes } = {}) {
       )}
 
       <table className="tbl">
-        <thead><tr><th>Fecha</th><th>Descripción</th><th>Banco</th><th>Tipo</th><th className="r">Monto</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Descripción</th>
+            <th>Banco</th>
+            <th>Tipo</th>
+            <th className="r">Monto</th>
+            <th style={{ width: 80, textAlign: 'center' }}>Acciones</th>
+          </tr>
+        </thead>
         <tbody>
           {filtrados.length === 0
-            ? <tr><td colSpan={5} style={{textAlign:'center',color:'var(--t3)',padding:'24px 0',fontStyle:'italic'}}>Sin resultados para los filtros aplicados</td></tr>
+            ? <tr><td colSpan={6} style={{textAlign:'center',color:'var(--t3)',padding:'24px 0',fontStyle:'italic'}}>Sin resultados para los filtros aplicados</td></tr>
             : filtrados.map((m,i)=>{
                 const desc = (m.descripcion || '').toLowerCase();
                 const isRescate = desc.includes('rescate') && (desc.includes('fondo') || desc.includes('ffmm') || desc.includes('mutuo'));
+                const recVal = reconciliations[getMovKey(m)];
                 return (
-                  <tr key={i} style={{opacity: m.isIntercompany ? 0.75 : 1}}>
+                  <tr key={i} style={{opacity: m.isIntercompany ? 0.75 : 1, background: m.isProvisional ? 'rgba(37,99,235,0.03)' : 'inherit'}}>
                     <td className="mono" style={{color:'var(--t3)',fontSize:13}}>{fmtDate(m.fecha)}</td>
-                    <td style={{fontWeight:500,maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={m.descripcion}>{m.descripcion}</td>
+                    <td style={{fontWeight:500,maxWidth:280}}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {m.isProvisional && (
+                          <span style={{ 
+                            background: '#eff6ff', color: 'var(--primary)', border: '1px solid rgba(37,99,235,0.15)',
+                            padding: '1px 6px', borderRadius: 4, fontSize: 9.5, fontWeight: 700
+                          }}>
+                            PROVISIONAL
+                          </span>
+                        )}
+                        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={m.descripcion}>
+                          {m.descripcion}
+                        </span>
+                      </div>
+                      {recVal && (
+                        <div style={{
+                          fontSize: 11, color: recVal.estado === 'Conciliado' ? '#059669' : recVal.estado === 'Revisado' ? '#d97706' : 'var(--text-secondary)',
+                          fontStyle: 'italic', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4
+                        }}>
+                          <span>📝</span>
+                          <span style={{maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={recVal.observacion}>
+                            {recVal.estado === 'Conciliado' ? '[Conciliado] ' : recVal.estado === 'Revisado' ? '[Revisado] ' : ''}
+                            {recVal.observacion}
+                          </span>
+                          <span style={{fontSize: 9.5, color: 'var(--t3)'}}>· {recVal.autor}</span>
+                        </div>
+                      )}
+                    </td>
                     <td style={{color:'var(--t3)',fontSize:12}}>{m.banco}</td>
                     <td>
                       {m.isIntercompany ? (
@@ -609,11 +920,46 @@ function MovimientosTable({ movRecientes } = {}) {
                           {isRescate ? 'RESCATE FFMM' : 'TRASPASO INTERNO'}
                         </span>
                       ) : (
-                        <span className={`pill ${m.tipo==='INGRESO'?'g':'r'}`}>{m.tipo}</span>
+                        <span className={`pill ${m.monto>0?'g':'r'}`}>{m.monto>0?'INGRESO':'GASTO'}</span>
                       )}
                     </td>
                     <td className="mono r" style={{fontWeight:600,color:m.isIntercompany?'var(--t3)':(m.monto>0?'var(--g600)':'var(--red)')}}>
                       {m.monto>0?'+':''}{fmt(m.monto)}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                        <button 
+                          onClick={() => handleOpenCommentDrawer(m)}
+                          title="Observación / Conciliar"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', fontSize: 14,
+                            padding: '4px', display: 'flex', alignItems: 'center', borderRadius: 4,
+                            position: 'relative'
+                          }}
+                          className="btn-hover-scale"
+                        >
+                          💬
+                          {recVal && (
+                            <span style={{
+                              width: 6, height: 6, background: recVal.estado === 'Conciliado' ? '#059669' : recVal.estado === 'Revisado' ? '#d97706' : '#94a3b8',
+                              borderRadius: '50%', position: 'absolute', top: 2, right: 0
+                            }} />
+                          )}
+                        </button>
+                        {m.isProvisional && (
+                          <button 
+                            onClick={() => handleDeleteAdjustment(m.id, m.descripcion, m.monto)}
+                            title="Eliminar movimiento provisorio"
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
+                              padding: '4px', display: 'flex', alignItems: 'center', borderRadius: 4, color: 'var(--red)'
+                            }}
+                            className="btn-hover-scale"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -621,11 +967,212 @@ function MovimientosTable({ movRecientes } = {}) {
           }
         </tbody>
       </table>
+
+      {/* Modal Agregar Ajuste Provisorio */}
+      {showAddAdjModal && (
+        <div style={{
+          position:'fixed', top:0, left:0, width:'100vw', height:'100vh',
+          background:'rgba(15,23,42,0.4)', backdropFilter:'blur(5px)',
+          display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000,
+          animation:'fadeIn 0.2s'
+        }}>
+          <div className="cloud-card" style={{ width: 380, padding: 24, background: 'var(--surface)' }}>
+            <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text)' }}>
+              Registrar Movimiento Provisional
+            </h3>
+            <form onSubmit={handleAddAdjustment} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Descripción</label>
+                <input 
+                  type="text" 
+                  className="cloud-input" 
+                  style={{ fontFamily: 'var(--font-main)', fontSize: 13, marginTop: 4 }}
+                  placeholder="Ej. Inyección Financiera..."
+                  value={newAdjDesc}
+                  onChange={e => setNewAdjDesc(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Monto (CLP)</label>
+                  <input 
+                    type="text" 
+                    className="cloud-input" 
+                    style={{ fontFamily: 'var(--font-main)', fontSize: 13, marginTop: 4 }}
+                    placeholder="Ej. 15.000.000"
+                    value={newAdjMonto}
+                    onChange={e => {
+                      const clean = e.target.value.replace(/\D/g, '');
+                      setNewAdjMonto(clean ? Number(clean).toLocaleString('es-CL') : '');
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Fecha</label>
+                  <input 
+                    type="date" 
+                    className="cloud-input" 
+                    style={{ fontFamily: 'var(--font-main)', fontSize: 12.5, marginTop: 4, height:38 }}
+                    value={newAdjFecha}
+                    onChange={e => setNewAdjFecha(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Tipo</label>
+                  <select 
+                    className="cloud-input" 
+                    style={{ fontSize: 13, cursor: 'pointer', marginTop: 4, height:38 }}
+                    value={newAdjTipo}
+                    onChange={e => setNewAdjTipo(e.target.value)}
+                  >
+                    <option value="INGRESO">INGRESO 🟢</option>
+                    <option value="GASTO">GASTO 🔴</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Banco</label>
+                  <select 
+                    className="cloud-input" 
+                    style={{ fontSize: 13, cursor: 'pointer', marginTop: 4, height:38 }}
+                    value={newAdjBanco}
+                    onChange={e => setNewAdjBanco(e.target.value)}
+                  >
+                    {Object.keys(saldos || SALDOS_BANCO).map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <button type="submit" className="cloud-btn-primary" style={{ flex: 1 }}>
+                  Registrar
+                </button>
+                <button 
+                  type="button" 
+                  className="cloud-btn-danger-outline" 
+                  onClick={() => setShowAddAdjModal(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer Observación / Conciliación */}
+      {selectedMov && (
+        <div style={{
+          position:'fixed', top:0, left:0, width:'100vw', height:'100vh',
+          background:'rgba(15,23,42,0.15)', backdropFilter:'blur(2px)',
+          zIndex:999, display:'flex', justifyContent:'flex-end'
+        }} onClick={() => setSelectedMov(null)}>
+          <div 
+            style={{
+              width: 350, height: '100vh', background: 'var(--surface)',
+              boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', borderLeft: '1px solid var(--border)',
+              padding: 24, display: 'flex', flexDirection: 'column', gap: 20,
+              animation: 'slideIn 0.3s'
+            }} 
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, color: 'var(--text)', margin:0 }}>
+                  Bitácora de Auditoría
+                </h3>
+                <button 
+                  onClick={() => setSelectedMov(null)}
+                  style={{ background:'none', border:'none', fontSize: 16, cursor:'pointer', color:'var(--t3)' }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--t3)' }}>Comentarios y estados colaborativos</div>
+            </div>
+
+            <hr style={{ border:'none', borderTop:'1px solid var(--border)' }} />
+
+            <div style={{ background: 'var(--background)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+                {selectedMov.descripcion}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--t3)' }}>
+                <span>Banco: {selectedMov.banco}</span>
+                <span style={{ fontWeight: 600, color: selectedMov.monto > 0 ? 'var(--g600)' : 'var(--red)' }}>
+                  {fmt(selectedMov.monto)}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display:'block', marginBottom:6 }}>
+                Estado de Conciliación
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['Pendiente', 'Revisado', 'Conciliado'].map(st => (
+                  <button
+                    key={st}
+                    onClick={() => setReconcileStatus(st)}
+                    style={{
+                      flex: 1, padding: '6px 8px', borderRadius: 6, fontSize: 11.5, fontWeight: 600,
+                      cursor: 'pointer', border: '1px solid',
+                      borderColor: reconcileStatus === st ? 'var(--primary)' : 'var(--border)',
+                      background: reconcileStatus === st ? 'var(--primary-light)' : 'var(--surface)',
+                      color: reconcileStatus === st ? 'var(--primary)' : 'var(--text-secondary)',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {st === 'Conciliado' ? '🟢 ' : st === 'Revisado' ? '🟡 ' : '⚪ '}
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display:'block', marginBottom:6 }}>
+                Observaciones
+              </label>
+              <textarea
+                className="cloud-input"
+                style={{ flex: 1, minHeight: 120, fontFamily: 'var(--font-main)', fontSize: 13 }}
+                placeholder="Escribe comentarios, dudas o notas de conciliación compartidas..."
+                value={commentInput}
+                onChange={e => setCommentInput(e.target.value)}
+              />
+            </div>
+
+            <button className="cloud-btn-primary" onClick={handleSaveComment} style={{ width: '100%' }}>
+              💾 Guardar Observación
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function MovimientosPage({ movRecientes, saldos, onNavTo }) {
+function MovimientosPage({ 
+  movRecientes, 
+  saldos, 
+  onNavTo,
+  manualAdjustments,
+  setManualAdjustments,
+  reconciliations,
+  setReconciliations,
+  logAuditEvent,
+  saveConfigToCloud,
+  fbUser
+}) {
   const months = Object.keys(MOV_BY_MONTH);
   const ingresos = months.map(m=>MOV_BY_MONTH[m].ingresos);
   const gastos_m = months.map(m=>MOV_BY_MONTH[m].gastos);
@@ -633,7 +1180,7 @@ function MovimientosPage({ movRecientes, saldos, onNavTo }) {
   const cur = MOV_BY_MONTH['2026-04'];
   const movRecientesList = movRecientes || MOV_RECIENTES;
   const totalBancario = Object.values(saldos || SALDOS_BANCO).reduce((a,b)=>a+b,0);
-  const maxSaldo = Math.max(...Object.values(SALDOS_BANCO));
+  const maxSaldo = Math.max(...Object.values(saldos || SALDOS_BANCO));
   const colores = ['var(--g600)','var(--g500)','var(--g400)','var(--amber)','oklch(52% .15 240)','var(--t3)'];
 
   return (
@@ -653,7 +1200,7 @@ function MovimientosPage({ movRecientes, saldos, onNavTo }) {
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
-          {Object.entries(SALDOS_BANCO).map(([banco,saldo],i)=>(
+          {Object.entries(saldos || SALDOS_BANCO).map(([banco,saldo],i)=>(
             <div key={i} style={{background:'rgba(255,255,255,.08)',borderRadius:10,padding:'12px 14px'}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                 <div style={{width:7,height:7,borderRadius:'50%',background:colores[i]}}/>
@@ -696,8 +1243,9 @@ function MovimientosPage({ movRecientes, saldos, onNavTo }) {
           let tIng = 0, tEg = 0;
           movRecientesList.forEach(m => {
             if (!m.isIntercompany) {
-              if (m.tipo === 'INGRESO') tIng += Math.abs(m.monto);
-              else if (m.tipo === 'GASTO' || m.tipo === 'EGRESO') tEg += Math.abs(m.monto);
+              const absVal = Math.abs(m.monto);
+              if (m.monto > 0) tIng += absVal;
+              else tEg += absVal;
             }
           });
           const fNet = tIng - tEg;
@@ -726,7 +1274,17 @@ function MovimientosPage({ movRecientes, saldos, onNavTo }) {
         })()}
       </div>
       <div style={{marginTop: 20}}>
-        <MovimientosTable movRecientes={movRecientesList} />
+        <MovimientosTable 
+          movRecientes={movRecientesList} 
+          saldos={saldos}
+          manualAdjustments={manualAdjustments}
+          setManualAdjustments={setManualAdjustments}
+          reconciliations={reconciliations}
+          setReconciliations={setReconciliations}
+          logAuditEvent={logAuditEvent}
+          saveConfigToCloud={saveConfigToCloud}
+          fbUser={fbUser}
+        />
       </div>
     </div>
   );
@@ -2917,60 +3475,186 @@ function HomePage({ saldos, movByMonth, gastos, ventas, creditos, fondos, alerts
 
 
 // ── App ──────────────────────────────────────────────────────────────────
-function PinLock({ onUnlock }) {
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState(false);
-  const [shake, setShake] = useState(false);
-  const HASH = '31313737'; // PIN codificado
+function PinLock({ onUnlock, onGoogleLogin, isFirebaseConfigured, loading, onReinitFirebase }) {
+  const [showConfigForm, setShowConfigForm] = useState(false);
+  const [configInput, setConfigInput] = useState(() => localStorage.getItem('FIREBASE_CONFIG') || '');
+  const [configError, setConfigError] = useState('');
 
-  const check = (p) => {
-    const encoded = p.split('').map(c=>c.charCodeAt(0).toString(16)).join('');
-    if (encoded === HASH) {
-      onUnlock();
-    } else {
-      setError(true);
-      setShake(true);
-      setTimeout(()=>{ setPin(''); setError(false); setShake(false); }, 700);
+  const handleSaveConfig = () => {
+    try {
+      let cleanInput = configInput.trim();
+      if (!cleanInput) {
+        localStorage.removeItem('FIREBASE_CONFIG');
+        alert("⚠️ Configuración de Firebase eliminada. Regresando a la pantalla de configuración de inicio.");
+        window.location.reload();
+        return;
+      }
+      
+      let parsed = null;
+      try {
+        parsed = JSON.parse(cleanInput);
+      } catch (err) {
+        // Relaxed parser for copy-pasted JavaScript config objects from Firebase Console
+        const config = {};
+        const keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        keys.forEach(k => {
+          const match = cleanInput.match(new RegExp(`['"]?${k}['"]?\\s*:\\s*['"]([^'"]+)['"]`));
+          if (match && match[1]) config[k] = match[1].trim();
+        });
+        if (config.apiKey && config.projectId) {
+          parsed = config;
+        }
+      }
+      
+      if (!parsed || !parsed.apiKey || !parsed.projectId) {
+        throw new Error("No se pudo detectar una configuración de Firebase válida. Asegúrate de copiar el objeto de configuración completo que contiene 'apiKey' y 'projectId'.");
+      }
+
+      localStorage.setItem('FIREBASE_CONFIG', JSON.stringify(parsed));
+      setConfigError('');
+      alert("✅ Configuración de Firebase guardada con éxito. La página se recargará para aplicar los cambios.");
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+      setConfigError(e.message || "Formato JSON inválido. Revisa las comas y comillas.");
     }
   };
 
-  const press = (d) => {
-    if (pin.length >= 4) return;
-    const next = pin + d;
-    setPin(next);
-    if (next.length === 4) setTimeout(()=>check(next), 120);
-  };
-
-  const del = () => setPin(p => p.slice(0,-1));
-
   return (
-    <div style={{position:'fixed',inset:0,background:'var(--g900)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:0}}>
-      <div style={{textAlign:'center',marginBottom:32}}>
-        <div style={{width:48,height:48,background:'var(--g600)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:22}}>🔒</div>
-        <div style={{fontSize:20,fontWeight:700,color:'#fff',letterSpacing:'-.3px'}}>Dashboard Financiero</div>
-        <div style={{fontSize:13,color:'var(--g400)',marginTop:4}}>Ingresa tu PIN para continuar</div>
-      </div>
+    <div style={{position:'fixed',inset:0,background:'var(--g900)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:0,fontFamily:'\'DM Sans\', sans-serif'}}>
+      
+      {/* Loading overlay during auth/sync */}
+      {loading && (
+        <div style={{position:'absolute',inset:0,background:'rgba(22, 28, 45, 0.95)',backdropFilter:'blur(10px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:20}}>
+          <div style={{width:50,height:50,border:'3px solid rgba(255,255,255,0.1)',borderTopColor:'oklch(60% .14 155)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+          <div style={{color:'rgba(255,255,255,0.85)',fontSize:15,fontWeight:500,letterSpacing:'-0.2px'}}>Sincronizando datos con la nube de Firebase...</div>
+        </div>
+      )}
 
-      {/* Dots */}
-      <div style={{display:'flex',gap:14,marginBottom:32,animation:shake?'pinShake .35s ease':'none'}}>
-        {[0,1,2,3].map(i=>(
-          <div key={i} style={{width:14,height:14,borderRadius:'50%',border:`2px solid ${error?'var(--red)':pin.length>i?'var(--g300)':'var(--g600)'}`,background:pin.length>i?(error?'var(--red)':'var(--g300)'):'transparent',transition:'all .15s'}}/>
-        ))}
-      </div>
+      {/* Main panel */}
+      <div style={{display: showConfigForm ? 'none' : 'flex', flexDirection: 'column', alignItems: 'center'}}>
+        <div style={{textAlign:'center',marginBottom:28}}>
+          <div style={{width:52,height:52,background:'var(--g600)',borderRadius:16,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,boxShadow:'0 8px 30px rgba(0,0,0,0.3)'}}>🔒</div>
+          <div style={{fontSize:22,fontWeight:700,color:'#fff',letterSpacing:'-0.5px'}}>Dashboard Financiero</div>
+          <div style={{fontSize:13,color:'var(--g400)',marginTop:5}}>
+            {isFirebaseConfigured ? 'Inicia sesión con tu cuenta Google para continuar' : 'Configura la conexión a tu servidor en la nube para continuar'}
+          </div>
+        </div>
 
-      {/* Keypad */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,72px)',gap:10}}>
-        {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((d,i)=>(
-          <button key={i} onClick={()=>d===''?null:d==='⌫'?del():press(String(d))}
-            style={{height:72,fontSize:d==='⌫'?20:22,fontWeight:600,background:d===''?'transparent':error?'rgba(220,38,38,.15)':'rgba(255,255,255,.07)',border:`1px solid ${d===''?'transparent':'rgba(255,255,255,.1)'}`,borderRadius:12,color:d===''?'transparent':'#fff',cursor:d===''?'default':'pointer',transition:'background .1s',fontFamily:'DM Sans'}}
-            onMouseEnter={e=>{if(d!=='')e.target.style.background='rgba(255,255,255,.14)'}}
-            onMouseLeave={e=>{if(d!=='')e.target.style.background=error?'rgba(220,38,38,.15)':'rgba(255,255,255,.07)'}}>
-            {d}
+        {/* Google Login Button */}
+        {isFirebaseConfigured && (
+          <button 
+            onClick={onGoogleLogin}
+            style={{
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'center',
+              gap:12,
+              width:236,
+              height:46,
+              background:'#fff',
+              border:'none',
+              borderRadius:10,
+              color:'#1e293b',
+              fontWeight:600,
+              fontSize:13.5,
+              cursor:'pointer',
+              marginBottom:24,
+              boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
+              transition:'transform 0.15s, box-shadow 0.15s',
+              fontFamily:'\'DM Sans\', sans-serif'
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.02)';e.currentTarget.style.boxShadow='0 6px 24px rgba(0,0,0,0.25)'}}
+            onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'}}
+          >
+            {/* Google Icon SVG */}
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.53-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.245-3.125C18.465 1.838 15.65 1 12.24 1 5.92 1 1 5.92 1 12.24s4.92 11.24 11.24 11.24c6.6 0 11-4.604 11-11.24 0-.765-.08-1.346-.245-1.955H12.24z"/>
+            </svg>
+            Acceder con Google
           </button>
-        ))}
+        )}
+
+        {/* Prompt to configure Cloud (rendered only when Firebase is not connected) */}
+        {!isFirebaseConfigured && (
+          <div style={{textAlign:'center',padding:'16px 20px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,maxWidth:280}}>
+            <div style={{fontSize:28,marginBottom:12}}>☁️</div>
+            <div style={{fontSize:14,fontWeight:600,color:'#fff',lineHeight:1.4}}>Acceso Protegido por Servidor Nube</div>
+            <div style={{fontSize:12,color:'var(--g400)',marginTop:8,lineHeight:1.4}}>
+              Para comenzar a utilizar el dashboard, por favor haz clic en el botón de abajo y configura las credenciales de tu servidor Firebase.
+            </div>
+          </div>
+        )}
       </div>
 
-      {error && <div style={{marginTop:20,fontSize:12.5,color:'var(--red)',fontWeight:600}}>PIN incorrecto</div>}
+      {/* Cloud Settings Configuration Popup Form */}
+      {showConfigForm && (
+        <div style={{width:320,padding:24,background:'oklch(20% .04 155)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:16,display:'flex',flexDirection:'column',gap:16,boxShadow:'0 10px 40px rgba(0,0,0,0.5)',animation:'pinShake 0.3s ease-out'}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:700,color:'#fff',letterSpacing:'-0.2px'}}>Configurar Conexión Nube</div>
+            <div style={{fontSize:11.5,color:'var(--g400)',marginTop:4}}>Pega el objeto JSON de tu configuración de Firebase:</div>
+          </div>
+
+          <textarea
+            value={configInput}
+            onChange={e=>setConfigInput(e.target.value)}
+            placeholder={`{\n  "apiKey": "AIzaSy...",\n  "authDomain": "...",\n  "projectId": "...",\n  "appId": "..."\n}`}
+            style={{
+              width:'100%',
+              height:160,
+              background:'rgba(0,0,0,0.2)',
+              border:'1px solid rgba(255,255,255,0.15)',
+              borderRadius:8,
+              padding:10,
+              color:'#fff',
+              fontSize:11,
+              fontFamily:'\'DM Mono\', monospace',
+              resize:'none',
+              outline:'none'
+            }}
+          />
+
+          {configError && <div style={{fontSize:11,color:'var(--red)',fontWeight:600}}>{configError}</div>}
+
+          <div style={{display:'flex',gap:10}}>
+            <button 
+              onClick={handleSaveConfig}
+              style={{flex:1,height:36,background:'oklch(60% .14 155)',border:'none',borderRadius:8,color:'#fff',fontWeight:600,fontSize:12,cursor:'pointer'}}
+            >
+              Guardar
+            </button>
+            <button 
+              onClick={()=>setShowConfigForm(false)}
+              style={{flex:1,height:36,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,color:'rgba(255,255,255,0.7)',fontWeight:600,fontSize:12,cursor:'pointer'}}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Configure Cloud button at bottom */}
+      {!showConfigForm && (
+        <button 
+          onClick={()=>setShowConfigForm(true)}
+          style={{
+            position:'absolute',
+            bottom:24,
+            background:'none',
+            border:'none',
+            color:'var(--g500)',
+            fontSize:11.5,
+            fontWeight:500,
+            cursor:'pointer',
+            textDecoration:'underline',
+            transition:'color 0.15s'
+          }}
+          onMouseEnter={e=>e.target.style.color='#fff'}
+          onMouseLeave={e=>e.target.style.color='var(--g500)'}
+        >
+          {isFirebaseConfigured ? '⚙️ Modificar Configuración Cloud' : '☁️ Conectar Servidor Nube (Firebase)'}
+        </button>
+      )}
 
       <style>{`@keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
     </div>
@@ -2983,20 +3667,251 @@ function App() {
   const [active,setActive] = useState('home');
   const [umbrales, setUmbrales] = useState(DEFAULT_UMBRALES);
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
-  const [showAlertCfg, setShowAlertCfg] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showUploadVentas, setShowUploadVentas] = useState(false);
-  const [showUploadNomina, setShowUploadNomina] = useState(false);
-  const handleNominaImport = (res) => {
-    NOMINA_DATA = res.byEmpresa;
-    NOMINA_MES  = res.mesStr || '';
-    setNominaVer(v => v+1);
-  };
+
+  // ── Firebase Auth & Sync Estados y Funciones ──
+  const [fbUser, setFbUser] = useState(null);
+  const [fbLoading, setFbLoading] = useState(false);
+  const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(() => isFirebaseAvailable());
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyBtSZRpBnkfBaCzxkeFptH9qTpu609JK70');
+  
+  const [manualAdjustments, setManualAdjustments] = useState(() => {
+    try {
+      const saved = localStorage.getItem('MANUAL_ADJUSTMENTS');
+      return saved ? JSON.parse(saved) : [];
+    } catch(e) {
+      return [];
+    }
+  });
+  
+  const [reconciliations, setReconciliations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('RECONCILIATIONS');
+      return saved ? JSON.parse(saved) : {};
+    } catch(e) {
+      return {};
+    }
+  });
+  
+  const [auditLogs, setAuditLogs] = useState([]);
   const [nominaVer, setNominaVer] = useState(0);
   const [saldos, setSaldos] = useState(SALDOS_BANCO);
   const [movRecientes, setMovRecientes] = useState(MOV_RECIENTES);
   const [movByMonth, setMovByMonth] = useState(MOV_BY_MONTH);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [showAlertCfg, setShowAlertCfg] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showUploadVentas, setShowUploadVentas] = useState(false);
+  const [showUploadNomina, setShowUploadNomina] = useState(false);
+
+  // Audit Log recording helper
+  const logAuditEvent = async (action, type = 'general') => {
+    if (!db) return;
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+    try {
+      const newLog = {
+        timestamp: new Date().toISOString(),
+        usuario: user.displayName || user.email || 'Usuario Autorizado',
+        email: user.email,
+        accion: action,
+        tipo: type
+      };
+      
+      const updatedLogs = [newLog, ...auditLogs].slice(0, 50); // Keep last 50 logs
+      setAuditLogs(updatedLogs);
+      await saveConfigToCloud(null, null, { auditLogs: updatedLogs });
+    } catch (e) {
+      console.error("Error al registrar evento de auditoría:", e);
+    }
+  };
+
+  const saveApiKey = async (key) => {
+    setApiKey(key);
+    localStorage.setItem('GEMINI_API_KEY', key);
+    if (fbUser) {
+      await saveConfigToCloud({ geminiApiKey: key }, umbrales);
+      await logAuditEvent(`Actualizó la clave API de Gemini Flash`, 'seguridad');
+    }
+  };
+
+  const handleReinitFirebase = () => {
+    setIsFirebaseConfigured(isFirebaseAvailable());
+  };
+
+  const handleGoogleLogin = async () => {
+    if (!isFirebaseConfigured || typeof firebase === 'undefined') return;
+    const provider = new firebase.auth.GoogleAuthProvider();
+    setFbLoading(true);
+    try {
+      await firebase.auth().signInWithPopup(provider);
+    } catch (err) {
+      console.warn("Popup blocked, trying redirect...", err);
+      try {
+        await firebase.auth().signInWithRedirect(provider);
+      } catch (e2) {
+        console.error("Login failed:", e2);
+        setFbLoading(false);
+        alert("Error de inicio de sesión: " + e2.message);
+      }
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    if (confirm("¿Deseas cerrar la sesión de forma segura?")) {
+      setFbLoading(true);
+      try {
+        if (firebaseUnsubscribe) {
+          firebaseUnsubscribe();
+          firebaseUnsubscribe = null;
+        }
+        await firebase.auth().signOut();
+        setFbUser(null);
+        localStorage.removeItem('GEMINI_API_KEY');
+        window.location.reload();
+      } catch (err) {
+        console.error("Error logging out:", err);
+        setFbLoading(false);
+      }
+    }
+  };
+
+  const handleSyncData = (cloudData) => {
+    if (cloudData.settings) {
+      if (cloudData.settings.geminiApiKey) {
+        setApiKey(cloudData.settings.geminiApiKey);
+        localStorage.setItem('GEMINI_API_KEY', cloudData.settings.geminiApiKey);
+      }
+    }
+    if (cloudData.umbrales) {
+      setUmbrales(cloudData.umbrales);
+    }
+    if (cloudData.manualAdjustments) {
+      setManualAdjustments(cloudData.manualAdjustments);
+      localStorage.setItem('MANUAL_ADJUSTMENTS', JSON.stringify(cloudData.manualAdjustments));
+    }
+    if (cloudData.reconciliations) {
+      setReconciliations(cloudData.reconciliations);
+      localStorage.setItem('RECONCILIATIONS', JSON.stringify(cloudData.reconciliations));
+    }
+    if (cloudData.auditLogs) {
+      setAuditLogs(cloudData.auditLogs);
+    }
+    setFbLoading(false);
+  };
+
+  useEffect(() => {
+    if (isFirebaseConfigured) {
+      setFbLoading(true);
+      const appInstance = initFirebaseInstance(
+        (user) => {
+          setFbUser(user);
+          if (user) {
+            setLocked(false);
+          } else {
+            setLocked(true);
+            setFbLoading(false);
+          }
+        },
+        handleSyncData
+      );
+      if (!appInstance) {
+        setFbLoading(false);
+      }
+    }
+  }, [isFirebaseConfigured]);
+
+  // Auto-integrar configuración de Firebase desde LocalStorage a index.html en disco
+  useEffect(() => {
+    const savedConfig = localStorage.getItem('FIREBASE_CONFIG');
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed && parsed.apiKey && parsed.apiKey !== "TU_API_KEY_REAL") {
+          if (DEFAULT_FIREBASE_CONFIG.apiKey === "TU_API_KEY_REAL") {
+            console.log("Auto-integrando Firebase...");
+            fetch('/api/save-config-to-disk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(parsed)
+            })
+            .then(res => {
+              if (res.ok) {
+                console.log("¡Configuración integrada en index.html con éxito!");
+                alert("🎉 ¡Excelentes noticias!\n\nHemos detectado tu sesión iniciada de Firebase y hemos integrado AUTOMÁTICAMENTE la conexión en el código fuente de tu archivo (index.html).\n\nAhora tu base de datos cloud está vinculada nativamente desde el inicio. La página se recargará para completar el proceso.");
+                window.location.reload();
+              }
+            })
+            .catch(err => {
+              console.error("Error al auto-integrar configuración de Firebase:", err);
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Error al verificar auto-integración:", e);
+      }
+    }
+  }, []);
+
+  // Sync umbrales to cloud when they change locally
+  useEffect(() => {
+    if (fbUser) {
+      saveConfigToCloud({ geminiApiKey: apiKey }, umbrales);
+      logAuditEvent(`Actualizó los umbrales de alerta financiera`, 'seguridad');
+    }
+  }, [umbrales]);
+
+  // unificaciones de Ajustes Manuales con los datos de Google Sheets
+  const unificatedMovRecientes = useMemo(() => {
+    if (!manualAdjustments || manualAdjustments.length === 0) return movRecientes;
+    const parsedAdjustments = manualAdjustments.map(adj => ({
+      fecha: adj.fecha,
+      descripcion: `[PROVISIONAL] ${adj.descripcion}`,
+      monto: Number(adj.monto),
+      tipo: adj.tipo,
+      banco: adj.banco,
+      isProvisional: true,
+      id: adj.id
+    }));
+    const combined = [...parsedAdjustments, ...movRecientes];
+    return combined.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  }, [movRecientes, manualAdjustments]);
+
+  const unificatedSaldos = useMemo(() => {
+    if (!manualAdjustments || manualAdjustments.length === 0) return saldos;
+    const combinedSaldos = { ...saldos };
+    manualAdjustments.forEach(adj => {
+      const b = adj.banco;
+      if (b && combinedSaldos[b] !== undefined) {
+        combinedSaldos[b] += Number(adj.monto);
+      }
+    });
+    return combinedSaldos;
+  }, [saldos, manualAdjustments]);
+
+  const unificatedMovByMonth = useMemo(() => {
+    if (!manualAdjustments || manualAdjustments.length === 0) return movByMonth;
+    const combinedBm = JSON.parse(JSON.stringify(movByMonth));
+    manualAdjustments.forEach(adj => {
+      const dateStr = adj.fecha;
+      if (!dateStr) return;
+      const m = dateStr.slice(0, 7); // 'YYYY-MM'
+      if (!combinedBm[m]) {
+        combinedBm[m] = { ingresos: 0, gastos: 0 };
+      }
+      const v = Math.abs(Number(adj.monto));
+      if (adj.tipo.toUpperCase() === 'INGRESO') {
+        combinedBm[m].ingresos += v;
+      } else {
+        combinedBm[m].gastos += v;
+      }
+    });
+    return Object.fromEntries(Object.entries(combinedBm).sort());
+  }, [movByMonth, manualAdjustments]);
+  const handleNominaImport = (res) => {
+    NOMINA_DATA = res.byEmpresa;
+    NOMINA_MES  = res.mesStr || '';
+    setNominaVer(v => v+1);
+  };
 
   useEffect(()=>{
     const sc = localStorage.getItem('fdash_col');
@@ -3230,6 +4145,7 @@ function App() {
     {id:'cre',  label:'Créditos',    icon:'cre'},
     {id:'fin',  label:'Finiquitos',  icon:'fin'},
     {id:'ia',   label:'Analista IA', icon:'ia'},
+    {id:'cloud',label:'Nube Cloud',  icon:'cld'},
   ];
   const titles={
     home:'Resumen General',
@@ -3240,7 +4156,8 @@ function App() {
     ven:'Reporte de Ventas',
     fon:'Fondos Mutuos',
     cre:'Créditos y Préstamos',
-    fin:'Finiquitos y Préstamos'
+    fin:'Finiquitos y Préstamos',
+    cloud:'Conexión Nube Cloud'
   };
   const subtitles={
     home:'Vista consolidada',
@@ -3251,10 +4168,19 @@ function App() {
     ven:'Facturación del período',
     fon:'Patrimonio invertido',
     cre:'Deuda y amortizaciones',
-    fin:'Finiquitos y préstamos a trabajadores'
+    fin:'Finiquitos y préstamos a trabajadores',
+    cloud:'Sincronización segura de configuraciones con Firebase'
   };
 
-  if (locked) return <PinLock onUnlock={()=>setLocked(false)}/>;
+  if (locked) return (
+    <PinLock 
+      onUnlock={() => setLocked(false)} 
+      onGoogleLogin={handleGoogleLogin} 
+      isFirebaseConfigured={isFirebaseConfigured} 
+      loading={fbLoading}
+      onReinitFirebase={handleReinitFirebase}
+    />
+  );
 
   if (!dataLoaded) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:16}}>
@@ -3353,15 +4279,40 @@ function App() {
         </div>
 
         <AlertStrip alerts={visibleAlerts} onClose={dismissAlert}/>
-        {active==='home' && <HomePage saldos={saldos} movByMonth={movByMonth} gastos={GASTOS} ventas={VENTAS} creditos={CREDITOS} fondos={FONDOS} alerts={[]} onNavTo={nav}/>}
-        {active==='mov'  && <MovimientosPage movRecientes={movRecientes} saldos={saldos} onNavTo={nav} />}
-        {active==='sim'  && <RunwaySimulatorPage saldos={saldos} movRecientes={movRecientes} />}
-        {active==='ia'   && <AIAdvisorPage saldos={saldos} movRecientes={movRecientes} />}
+        {active==='home' && <HomePage saldos={unificatedSaldos} movByMonth={unificatedMovByMonth} gastos={GASTOS} ventas={VENTAS} creditos={CREDITOS} fondos={FONDOS} alerts={[]} onNavTo={nav}/>}
+        {active==='mov'  && (
+          <MovimientosPage 
+            movRecientes={unificatedMovRecientes} 
+            saldos={unificatedSaldos} 
+            onNavTo={nav} 
+            manualAdjustments={manualAdjustments}
+            setManualAdjustments={setManualAdjustments}
+            reconciliations={reconciliations}
+            setReconciliations={setReconciliations}
+            logAuditEvent={logAuditEvent}
+            saveConfigToCloud={saveConfigToCloud}
+            fbUser={fbUser}
+          />
+        )}
+        {active==='sim'  && <RunwaySimulatorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} />}
+        {active==='ia'   && <AIAdvisorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} apiKey={apiKey} saveApiKey={saveApiKey} />}
         {active==='gas'  && <GastosPage nominaVer={nominaVer}/>}
         {active==='ven'  && <VentasPage onUpload={()=>setShowUploadVentas(true)} dataLoaded={dataLoaded}/>}
         {active==='fon'  && <FondosPage/>}
-        {active==='cre'  && <CreditosPage saldos={saldos}/>}
+        {active==='cre'  && <CreditosPage saldos={unificatedSaldos}/>}
         {active==='fin'  && <FiniquitosPage/>}
+        {active==='cloud'&& (
+          <CloudSyncPage 
+            isFirebaseConfigured={isFirebaseConfigured} 
+            fbUser={fbUser} 
+            fbLoading={fbLoading} 
+            onReinitFirebase={handleReinitFirebase} 
+            onGoogleLogin={handleGoogleLogin} 
+            onGoogleLogout={handleGoogleLogout} 
+            config={getSavedFirebaseConfig()} 
+            auditLogs={auditLogs}
+          />
+        )}
       </main>
     </>
   );
@@ -3427,7 +4378,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
 
         // 2. Gastos Variables este día
         const gastosDia = incluirGastos ? GASTOS.filter(g => {
-          if (g.estado === 'PAGADO' || !g.fecha) return false;
+          if ((g.estado && g.estado.toLowerCase() === 'pagado') || !g.fecha) return false;
           const d = new Date(g.fecha + 'T12:00:00');
           return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
         }).reduce((s, g) => s + g.monto, 0) : 0;
@@ -3495,7 +4446,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
 
         // 2. Gastos Variables
         const gastosMes = incluirGastos ? GASTOS.filter(g => {
-          if (g.estado === 'PAGADO' || !g.fecha) return false;
+          if ((g.estado && g.estado.toLowerCase() === 'pagado') || !g.fecha) return false;
           const d = new Date(g.fecha + 'T12:00:00');
           return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
         }).reduce((s, g) => s + g.monto, 0) : 0;
@@ -3764,16 +4715,11 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
 }
 
 // ── AI CFO Advisor Page Component ──
-function AIAdvisorPage({ saldos, movRecientes }) {
+function AIAdvisorPage({ saldos, movRecientes, apiKey, saveApiKey }) {
   const [pregunta, setPregunta] = useState('');
   const [chatResponse, setChatResponse] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyBtSZRpBnkfBaCzxkeFptH9qTpu609JK70');
   const [showApiKey, setShowApiKey] = useState(false);
-  const saveApiKey = (key) => {
-    setApiKey(key);
-    localStorage.setItem('GEMINI_API_KEY', key);
-  };
 
   const totalCaja = Object.values(saldos || SALDOS_BANCO).reduce((a, b) => a + b, 0);
   const totalInversiones = FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
@@ -3934,25 +4880,25 @@ Recuerda:
     if (query === 'diagnostico') {
       text = `<strong>Diagnóstico de Salud Financiera:</strong><br><br>
       La situación financiera del grupo se cataloga como <strong>Sólida con Atención en Cartera</strong>.<br><br>
-      • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>\${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
-      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>\${fmt(sueldosTotal)}</strong> y gastos fijos de <strong>\${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>\${fmt(sueldosTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
+      • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
+      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>${fmt(sueldosTotal)}</strong> y gastos fijos de <strong>${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>${fmt(sueldosTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
       • <strong>Relación GMD & Grafhika:</strong> El sistema ha detectado y aislado los movimientos inter-compañías entre las empresas hermanas (incluyendo traspasos directos y TEFs recurrentes). Estos flujos internos han sido completamente excluidos de las métricas de ingresos y egresos de caja para entregar un análisis de rentabilidad orgánico y libre de doble contabilidad.<br>
       • <strong>Riesgo:</strong> El simulador muestra que, en caso de que la cobranza caiga al 50% de efectividad, la caja operativa podría contraerse considerablemente en los próximos 6 meses si no se cuenta con retiros de tus fondos de inversión.`;
     } else if (query === 'riesgo-clientes') {
       text = `<strong>Análisis de Cartera y Clientes Críticos:</strong><br><br>
-      La cobranza total pendiente en estado VENCIDO suma un total de <strong>\${fmt(cobranzaVencida)}</strong>.<br><br>
-      • <strong>Mayor Deudor Individual:</strong> La empresa <strong>\${maxDebtorName}</strong> adeuda un saldo neto de <strong>\${fmt(maxDebtorVal)}</strong>, concentrando un preocupante <strong>\${maxDebtorPercent.toFixed(1)}%</strong> del riesgo total de tu cartera de cobro.<br>
+      La cobranza total pendiente en estado VENCIDO suma un total de <strong>${fmt(cobranzaVencida)}</strong>.<br><br>
+      • <strong>Mayor Deudor Individual:</strong> La empresa <strong>${maxDebtorName}</strong> adeuda un saldo neto de <strong>${fmt(maxDebtorVal)}</strong>, concentrando un preocupante <strong>${maxDebtorPercent.toFixed(1)}%</strong> del riesgo total de tu cartera de cobro.<br>
       • <strong>Gestión Directa:</strong> Se aconseja iniciar contacto preventivo inmediato.<br>
       • <strong>Alternativa de Liquidez:</strong> Ceder estos folios vencidos de clientes corporativos triple-A a factoring inyectará caja de inmediato reduciendo el costo de cobranza judicial.`;
     } else if (query === 'runway-analisis') {
       text = `<strong>Análisis Detallado de Runway y Nómina:</strong><br><br>
-      Tus egresos recurrentes de planta mensuales son de <strong>\${fmt(sueldosTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
-      • <strong>Remuneraciones Consolidadas:</strong> <strong>\${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
-      • <strong>Gastos Fijos Operativos:</strong> <strong>\${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
-      Tu runway de caja es de aproximadamente <strong>\${(totalCaja / (sueldosTotal + fijosTotal)).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>\${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
+      Tus egresos recurrentes de planta mensuales son de <strong>${fmt(sueldosTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
+      • <strong>Remuneraciones Consolidadas:</strong> <strong>${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
+      • <strong>Gastos Fijos Operativos:</strong> <strong>${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
+      Tu runway de caja es de aproximadamente <strong>${(totalCaja / (sueldosTotal + fijosTotal)).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
     } else if (query === 'estrategia-90') {
       text = `<strong>Recomendaciones Estratégicas para los Próximos 90 Días:</strong><br><br>
-      1. <strong>Campaña Preferencial sobre \${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>\${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
+      1. <strong>Campaña Preferencial sobre ${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
       2. <strong>Rentabilización de Caja Inactiva</strong>: Mantienes saldos de cuenta corriente ociosos. Recomendamos traspasar excedentes a Fondos Mutuos de rescate inmediato para generar retornos sin asumir riesgos corporativos.<br>
       3. <strong>Planificación ante Vencimientos</strong>: Las cuotas de créditos se concentran a inicios del mes (día 4 y día 13). Asegurar que las cuentas corrientes tengan saldo suficiente al menos 48h hábiles antes para evitar sobregiros automáticos y cargos de interés comercial.`;
     } 
@@ -3971,12 +4917,12 @@ Recuerda:
       const activeSaldos = saldos || SALDOS_BANCO;
       const totalBancos = Object.values(activeSaldos).reduce((a, b) => a + b, 0);
       const breakdown = Object.entries(activeSaldos)
-        .map(([banco, monto]) => `• <strong>\${banco}</strong>: \${fmt(monto)}`)
+        .map(([banco, monto]) => `• <strong>${banco}</strong>: ${fmt(monto)}`)
         .join("<br>");
 
       text = `<strong>Resumen de Saldos Bancarios y Liquidez Inmediata:</strong><br><br>
-      Dispones de un saldo de caja consolidado de <strong>\${fmt(totalBancos)}</strong> en tus cuentas corrientes.<br><br>
-      <strong>Desglose por Entidad Bancaria:</strong><br>\${breakdown}<br><br>
+      Dispones de un saldo de caja consolidado de <strong>${fmt(totalBancos)}</strong> en tus cuentas corrientes.<br><br>
+      <strong>Desglose por Entidad Bancaria:</strong><br>${breakdown}<br><br>
       <em>Nota: Esta liquidez te entrega una base robusta para la cobertura de egresos. No incluye tus fondos de inversión en FFMM.</em>`;
     }
     // 2. NOMINA / SUELDOS
@@ -3999,22 +4945,22 @@ Recuerda:
       let breakdown = "";
       if (activeNomina.length > 0) {
         breakdown = "<strong>Desglose por Empresa:</strong><br>" + activeNomina
-          .map(e => `• <strong>\${e.empresa}</strong>: \${fmt(e.monto)} (\${e.personas || 1} personas)`)
+          .map(e => `• <strong>${e.empresa}</strong>: ${fmt(e.monto)} (${e.personas || 1} personas)`)
           .join("<br>");
       } else {
         const fallbackNom = (typeof SUELDOS_DATA !== 'undefined' && SUELDOS_DATA.length) 
           ? SUELDOS_DATA.reduce((s, f) => s + f.monto, 0)
           : 0;
         if (fallbackNom > 0) {
-          breakdown = `• Nómina estimada de planta (Google Sheets): <strong>\${fmt(fallbackNom)}</strong>`;
+          breakdown = `• Nómina estimada de planta (Google Sheets): <strong>${fmt(fallbackNom)}</strong>`;
         } else {
           breakdown = "<em>No se registra nómina cargada en el sistema para este período.</em>";
         }
       }
 
       text = `<strong>Análisis de Nómina y Remuneraciones del Período:</strong><br><br>
-      Este mes se registra un egreso acumulado de <strong>\${fmt(totalSueldos || sueldosTotal)}</strong> para el pago de remuneraciones, cubriendo a un total estimado de <strong>\${totalPersonas || 1}</strong> colaboradores.<br><br>
-      \${breakdown}<br><br>
+      Este mes se registra un egreso acumulado de <strong>${fmt(totalSueldos || sueldosTotal)}</strong> para el pago de remuneraciones, cubriendo a un total estimado de <strong>${totalPersonas || 1}</strong> colaboradores.<br><br>
+      ${breakdown}<br><br>
       <em>Recomendación: La nómina de sueldos constituye tu mayor compromiso de egreso fijo recurrente. Asegurar saldo suficiente el día 30 en cuentas operativas.</em>`;
     }
     // 3. COBRANZAS / CUENTAS POR COBRAR / RECEIVABLES
@@ -4066,16 +5012,16 @@ Recuerda:
       const topDebtors = Object.entries(debtors)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
-        .map(([name, val]) => `• <strong>\${name}</strong>: \${fmt(val)}`)
+        .map(([name, val]) => `• <strong>${name}</strong>: ${fmt(val)}`)
         .join("<br>");
 
-      text = `<strong>Auditoría de Cuentas por Cobrar (Próximos \${days} días):</strong><br><br>
-      El sistema proyecta el siguiente panorama de cobranza desde el día de corte (<strong>\${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>):<br><br>
-      • <strong>Cobranza por vencer (próximos \${days} días)</strong>: <strong>\${fmt(sumPorVencer)}</strong> (\${porVencer.length} facturas activas).<br>
-      • <strong>Cobranza ya VENCIDA (mora acumulada)</strong>: <strong>\${fmt(sumVencidas)}</strong> (\${vencidas.length} facturas vencidas).<br>
-      • <strong>Cuentas por cobrar totales disponibles</strong>: <strong>\${fmt(sumVencidas + sumPorVencer)}</strong>.<br><br>
-      \${topDebtors.length > 0 ? `<strong>Clientes clave con vencimientos en este período:</strong><br>\${topDebtors}<br><br>` : ''}
-      <em>Estrategia: Un total de \${fmt(sumPorVencer)} está programado para entrar en caja de forma natural. Se aconseja un seguimiento preventivo 5 días antes de cada vencimiento crítico.</em>`;
+      text = `<strong>Auditoría de Cuentas por Cobrar (Próximos ${days} días):</strong><br><br>
+      El sistema proyecta el siguiente panorama de cobranza desde el día de corte (<strong>${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>):<br><br>
+      • <strong>Cobranza por vencer (próximos ${days} días)</strong>: <strong>${fmt(sumPorVencer)}</strong> (${porVencer.length} facturas activas).<br>
+      • <strong>Cobranza ya VENCIDA (mora acumulada)</strong>: <strong>${fmt(sumVencidas)}</strong> (${vencidas.length} facturas vencidas).<br>
+      • <strong>Cuentas por cobrar totales disponibles</strong>: <strong>${fmt(sumVencidas + sumPorVencer)}</strong>.<br><br>
+      ${topDebtors.length > 0 ? `<strong>Clientes clave con vencimientos en este período:</strong><br>${topDebtors}<br><br>` : ''}
+      <em>Estrategia: Un total de ${fmt(sumPorVencer)} está programado para entrar en caja de forma natural. Se aconseja un seguimiento preventivo 5 días antes de cada vencimiento crítico.</em>`;
     }
     // 4. FONDOS MUTUOS / INVERSIONES
     else if (
@@ -4087,7 +5033,7 @@ Recuerda:
     ) {
       const activeFondos = FONDOS && FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
       text = `<strong>Auditoría de Fondos de Inversión y Excedentes:</strong><br><br>
-      Mantienes una cartera activa de Fondos Mutuos valorizada en <strong>\${fmt(activeFondos || totalInversiones)}</strong>.<br><br>
+      Mantienes una cartera activa de Fondos Mutuos valorizada en <strong>${fmt(activeFondos || totalInversiones)}</strong>.<br><br>
       • <strong>Rol del Portafolio:</strong> Estos fondos actúan como reserva líquida de contingencia y generan retornos diarios sobre tus excedentes.<br>
       • <strong>Facilidad de Rescate:</strong> Dado su carácter de rescate en 24/48 horas, se consideran caja de respaldo inmediata frente a caídas drásticas de facturación.<br><br>
       <em>Recomendación: En caso de requerir caja para cubrir finiquitos imprevistos o cuotas de créditos, realizar rescates parciales para no sobregirar las cuentas operativas.</em>`;
@@ -4109,16 +5055,16 @@ Recuerda:
       let breakdown = "";
       if (activeCreditos.length > 0) {
         breakdown = "<strong>Créditos activos contratados:</strong><br>" + activeCreditos
-          .map(c => `• <strong>\${c.banco}</strong>: Cuota de \${fmt(c.montoPago)} (Vence el día \${c.diaPago || 'N/A'})`)
+          .map(c => `• <strong>${c.banco}</strong>: Cuota de ${fmt(c.montoPago)} (Vence el día ${c.diaPago || 'N/A'})`)
           .join("<br>");
       } else {
         breakdown = "<em>No se registran créditos bancarios pendientes de pago para este período.</em>";
       }
 
       text = `<strong>Estado de Créditos Bancarios y Compromisos Financieros:</strong><br><br>
-      Este mes debes cubrir un total de <strong>\${fmt(totalCuotaMes || creditosMes)}</strong> en cuotas de créditos bancarios activos.<br><br>
-      \${breakdown}<br><br>
-      • <strong>Saldo Pendiente Estimado de Deuda Bancaria</strong>: <strong>\${fmt(outstandingSum)}</strong>.<br><br>
+      Este mes debes cubrir un total de <strong>${fmt(totalCuotaMes || creditosMes)}</strong> en cuotas de créditos bancarios activos.<br><br>
+      ${breakdown}<br><br>
+      • <strong>Saldo Pendiente Estimado de Deuda Bancaria</strong>: <strong>${fmt(outstandingSum)}</strong>.<br><br>
       <em>Nota: Las cuotas de amortización representan un egreso de caja ineludible. Asegurar liquidez en las cuentas corrientes correspondientes en sus días de vencimiento.</em>`;
     }
     // 6. FINIQUITOS
@@ -4134,15 +5080,15 @@ Recuerda:
       let breakdown = "";
       if (activeFiniquitos.length > 0) {
         breakdown = "<strong>Detalle de Finiquitos Pendientes:</strong><br>" + activeFiniquitos
-          .map(f => `• <strong>\${f.trabajador || 'Trabajador'}</strong> (\${f.empresa || 'Empresa'}): \${fmt(f.montoPago)} - Vencimiento: \${f.fecha || 'N/A'}`)
+          .map(f => `• <strong>${f.trabajador || 'Trabajador'}</strong> (${f.empresa || 'Empresa'}): ${fmt(f.montoPago)} - Vencimiento: ${f.fecha || 'N/A'}`)
           .join("<br>");
       } else {
         breakdown = "<em>No se registran finiquitos ni indemnizaciones pendientes de pago para este mes.</em>";
       }
 
       text = `<strong>Reporte de Finiquitos y Compromisos Laborales Extraordinarios:</strong><br><br>
-      El total por pagar por concepto de finiquitos y salidas extraordinarias de personal este mes es de <strong>\${fmt(sumFiniquitos)}</strong>.<br><br>
-      \${breakdown}<br><br>
+      El total por pagar por concepto de finiquitos y salidas extraordinarias de personal este mes es de <strong>${fmt(sumFiniquitos)}</strong>.<br><br>
+      ${breakdown}<br><br>
       <em>Sugerencia: Estos egresos son de alta prioridad legal. Asegura los saldos o utiliza la línea de crédito si los flujos de cobranza se retrasan.</em>`;
     }
     // 7. TRASPASOS / PAGOS / TRANSFERENCIAS PERSONALIZADOS (e.g. Brandon Villarroel)
@@ -4216,23 +5162,23 @@ Recuerda:
         });
         const bankBreakdown = Object.entries(bankGroup)
           .map(([bank, val]) => `• <strong>
-\${bank}</strong>: \${fmt(val)}`)
+${bank}</strong>: ${fmt(val)}`)
           .join('<br>');
 
         const listDetails = matchedMovs.slice(0, 10)
-          .map(m => `• <strong>\${m.fecha}</strong>: \${m.descripcion} - <strong>\${fmt(Math.abs(m.monto))}</strong> (\${m.banco})`)
+          .map(m => `• <strong>${m.fecha}</strong>: ${m.descripcion} - <strong>${fmt(Math.abs(m.monto))}</strong> (${m.banco})`)
           .join('<br>');
 
         text = `<strong>Auditoría de Transferencias y Pagos Realizados:</strong><br><br>
-        Se han identificado <strong>\${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"\${words.join(', ')}"</em>)\${hasExplicitTimeframe ? ` en los últimos \${days} días` : ' en todo el historial disponible'}:<br><br>
-        • <strong>Monto total transferido</strong>: <strong>\${fmt(sumTransfers)}</strong>.<br><br>
-        <strong>Desglose por Entidad Bancaria:</strong><br>\${bankBreakdown}<br><br>
-        <strong>Movimientos detectados (hasta 10):</strong><br>\${listDetails}<br><br>
+        Se han identificado <strong>${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"${words.join(', ')}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en todo el historial disponible'}:<br><br>
+        • <strong>Monto total transferido</strong>: <strong>${fmt(sumTransfers)}</strong>.<br><br>
+        <strong>Desglose por Entidad Bancaria:</strong><br>${bankBreakdown}<br><br>
+        <strong>Movimientos detectados (hasta 10):</strong><br>${listDetails}<br><br>
         <em>Análisis: Estos egresos corresponden a transferencias bancarias directas y cobros registrados en tus cartolas.</em>`;
       } else {
         const searchedTerms = words.length > 0 ? words.join(', ') : 'términos vacíos';
         text = `<strong>Consulta de Transferencias / Pagos:</strong><br><br>
-        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"\${searchedTerms}"</em>)\${hasExplicitTimeframe ? ` en los últimos \${days} días` : ' en el historial'}.<br><br>
+        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"${searchedTerms}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en el historial'}.<br><br>
         • <strong>Sugerencia</strong>: Asegúrate de escribir el nombre o razón social correcto (por ejemplo, <em>"Brandon Villarroel"</em>, <em>"Jaime"</em>, o <em>"Poliplas"</em>).`;
       }
     }
@@ -4252,19 +5198,19 @@ Recuerda:
       const totalPag = pagados.reduce((s, g) => s + g.monto, 0);
 
       const listPend = pendientes.slice(0, 8)
-        .map(g => `• <strong>\${g.fecha}</strong>: \${g.descripcion} - <strong>\${fmt(g.monto)}</strong>`)
+        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
         .join('<br>');
 
       const listPag = pagados.slice(0, 8)
-        .map(g => `• <strong>\${g.fecha}</strong>: \${g.descripcion} - <strong>\${fmt(g.monto)}</strong>`)
+        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
         .join('<br>');
 
       text = `<strong>Control y Proyección de Cheques (Gastos Proyectados):</strong><br><br>
-      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>\${fmt(totalPend)}</strong> (\${pendientes.length} cheques por cobrar).<br>
-      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>\${fmt(totalPag)}</strong> (\${pagados.length} cheques cobrados).<br>
-      • <strong>Total Cartera de Proyección</strong>: <strong>\${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
-      \${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>\${listPend}<br><br>` : ''}
-      \${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>\${listPag}<br><br>` : ''}
+      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>${fmt(totalPend)}</strong> (${pendientes.length} cheques por cobrar).<br>
+      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>${fmt(totalPag)}</strong> (${pagados.length} cheques cobrados).<br>
+      • <strong>Total Cartera de Proyección</strong>: <strong>${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
+      ${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>${listPend}<br><br>` : ''}
+      ${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>${listPag}<br><br>` : ''}
       <em>Análisis de Proyección: La cartera de cheques representa los compromisos adquiridos con proveedores en base a la facturación proyectada.</em>`;
     }
     // 8. GASTOS FIJOS / GASTOS GENERALES
@@ -4278,14 +5224,14 @@ Recuerda:
       query.includes("costos")
     ) {
       const totalSueldos = NOMINA_DATA.reduce((s, e) => s + e.monto, 0);
-      const variableGastos = GASTOS.filter(g => g.estado !== 'PAGADO').reduce((s, g) => s + g.monto, 0);
+      const variableGastos = GASTOS.filter(g => !g.estado || g.estado.toLowerCase() !== 'pagado').reduce((s, g) => s + g.monto, 0);
 
       text = `<strong>Análisis Consolidado de Egresos y Gastos Operativos:</strong><br><br>
-      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>\${fmt(totalSueldos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
-      • <strong>Remuneraciones (Sueldos)</strong>: <strong>\${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
-      • <strong>Gastos Fijos Operativos</strong>: <strong>\${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
-      • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>\${fmt(variableGastos)}</strong>.<br><br>
-      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>\${fmt(totalSueldos + fijosTotal)}</strong>.</em>`;
+      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>${fmt(totalSueldos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
+      • <strong>Remuneraciones (Sueldos)</strong>: <strong>${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
+      • <strong>Gastos Fijos Operativos</strong>: <strong>${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
+      • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>${fmt(variableGastos)}</strong>.<br><br>
+      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>${fmt(totalSueldos + fijosTotal)}</strong>.</em>`;
     }
     // 8. FALLBACK / GENERAL RECOMMENDATIONS
     else {
@@ -4302,7 +5248,7 @@ Recuerda:
     }
 
     if (errorMsg) {
-      text = `<div style="padding: 10px 14px; background: oklch(96% .04 70); border: 1px solid oklch(86% .08 70); border-radius: 8px; font-size: 11.5px; margin-bottom: 14px; color: oklch(45% .15 70); font-family: 'DM Sans', sans-serif;">⚠️ <strong>Modo offline temporal:</strong> No se pudo conectar a Gemini Flash (\${errorMsg}). Respondiendo con el motor local offline.</div>\${text}`;
+      text = `<div style="padding: 10px 14px; background: oklch(96% .04 70); border: 1px solid oklch(86% .08 70); border-radius: 8px; font-size: 11.5px; margin-bottom: 14px; color: oklch(45% .15 70); font-family: 'DM Sans', sans-serif;">⚠️ <strong>Modo offline temporal:</strong> No se pudo conectar a Gemini Flash (${errorMsg}). Respondiendo con el motor local offline.</div>${text}`;
     }
 
     return text;
@@ -4319,9 +5265,9 @@ Recuerda:
     if (apiKey.trim()) {
       const systemPrompt = buildSystemPrompt();
       const context = buildContext();
-      const prompt = `\${systemPrompt}\n\nCONTEXTO FINANCIERO:\n\${context}\n\nPREGUNTA DEL USUARIO:\n\${queryInput}`;
+      const prompt = `${systemPrompt}\n\nCONTEXTO FINANCIERO:\n${context}\n\nPREGUNTA DEL USUARIO:\n${queryInput}`;
 
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\${apiKey.trim()}`, {
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey.trim()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -4336,7 +5282,7 @@ Recuerda:
         })
       })
       .then(res => {
-        if (!res.ok) throw new Error(`Error API (\${res.status})`);
+        if (!res.ok) throw new Error(`Error API (${res.status})`);
         return res.json();
       })
       .then(data => {
@@ -4554,6 +5500,501 @@ Recuerda:
               <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
           </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
+// ── Cloud Sync Page Component ──
+function CloudSyncPage({ isFirebaseConfigured, fbUser, fbLoading, onReinitFirebase, onGoogleLogin, onGoogleLogout, config, auditLogs }) {
+  const [configInput, setConfigInput] = useState(() => config ? JSON.stringify(config, null, 2) : '');
+  const [showConfigForm, setShowConfigForm] = useState(!isFirebaseConfigured);
+
+  const handleSaveConfig = () => {
+    try {
+      let cleanInput = configInput.trim();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(cleanInput);
+      } catch (err) {
+        // Relaxed parser for copy-pasted JavaScript config objects from Firebase Console
+        const configObj = {};
+        const keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        keys.forEach(k => {
+          const match = cleanInput.match(new RegExp(`['"]?${k}['"]?\\s*:\\s*['"]([^'"]+)['"]`));
+          if (match && match[1]) configObj[k] = match[1].trim();
+        });
+        if (configObj.apiKey && configObj.projectId && configObj.authDomain) {
+          parsed = configObj;
+        }
+      }
+
+      if (!parsed || !parsed.apiKey || !parsed.projectId || !parsed.authDomain) {
+        alert("⚠️ Objeto de configuración de Firebase inválido o incompleto. Debe contener al menos apiKey, authDomain y projectId.");
+        return;
+      }
+
+      localStorage.setItem('FIREBASE_CONFIG', JSON.stringify(parsed));
+      alert("✅ Configuración de Firebase guardada con éxito. La página se recargará para aplicar los cambios.");
+      window.location.reload();
+    } catch (e) {
+      alert("❌ Error al procesar la configuración: " + e.message);
+    }
+  };
+
+  const handleDisconnectFirebase = () => {
+    if (confirm("⚠️ ¿Estás seguro de que deseas desconectar y eliminar las credenciales de Firebase de este navegador?\n\nSe cerrará la sesión y volverá al PIN offline.")) {
+      localStorage.removeItem('FIREBASE_CONFIG');
+      alert("☁️ Firebase desconectado con éxito. La página se recargará.");
+      window.location.reload();
+    }
+  };
+
+  return (
+    <div className="page" style={{ padding: '0px 8px' }}>
+      <style>{`
+        .cloud-container {
+          display: grid;
+          grid-template-columns: 1.2fr 1.8fr;
+          gap: 24px;
+          align-items: start;
+          width: 100%;
+          margin-top: 10px;
+        }
+        @media(max-width: 900px) {
+          .cloud-container {
+            grid-template-columns: 1fr;
+          }
+        }
+        .cloud-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          padding: 24px;
+          box-shadow: var(--shadow-sm);
+          transition: all var(--transition-normal);
+        }
+        .cloud-card:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+        }
+        .cloud-badge-success {
+          background: #ecfdf5;
+          color: #059669;
+          border: 1px solid rgba(5,150,105,0.15);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          font-size: 11px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cloud-badge-warning {
+          background: #fffbeb;
+          color: #d97706;
+          border: 1px solid rgba(217,119,6,0.15);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          font-size: 11px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cloud-badge-danger {
+          background: #fef2f2;
+          color: #dc2626;
+          border: 1px solid rgba(220,38,38,0.15);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          font-size: 11px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cloud-sync-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          background: var(--background);
+          margin-bottom: 12px;
+          transition: all 0.2s;
+        }
+        .cloud-sync-item:hover {
+          background: var(--primary-light);
+          border-color: rgba(37,99,235,0.15);
+        }
+        .cloud-btn-primary {
+          background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+          color: white;
+          border: none;
+          padding: 10px 16px;
+          border-radius: var(--radius-md);
+          font-weight: 600;
+          cursor: pointer;
+          font-family: var(--font-main);
+          font-size: 13px;
+          box-shadow: 0 4px 10px rgba(37,99,235,0.25);
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .cloud-btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 14px rgba(37,99,235,0.35);
+        }
+        .cloud-btn-google {
+          background: #ffffff;
+          color: #1f2937;
+          border: 1px solid #d1d5db;
+          padding: 12px 18px;
+          border-radius: var(--radius-md);
+          font-weight: 600;
+          cursor: pointer;
+          font-family: var(--font-main);
+          font-size: 13.5px;
+          box-shadow: var(--shadow-sm);
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+          margin-top: 16px;
+        }
+        .cloud-btn-google:hover {
+          background: #f9fafb;
+          border-color: #cbd5e1;
+          transform: translateY(-1px);
+          box-shadow: var(--shadow-md);
+        }
+        .cloud-btn-danger-outline {
+          background: transparent;
+          color: #dc2626;
+          border: 1px solid rgba(220,38,38,0.3);
+          padding: 8px 14px;
+          border-radius: var(--radius-md);
+          font-weight: 600;
+          cursor: pointer;
+          font-family: var(--font-main);
+          font-size: 12px;
+          transition: all 0.2s;
+        }
+        .cloud-btn-danger-outline:hover {
+          background: #fef2f2;
+          border-color: #dc2626;
+        }
+        .cloud-input {
+          width: 100%;
+          background: var(--bg);
+          color: var(--text);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          padding: 12px;
+          font-family: monospace;
+          font-size: 12px;
+          line-height: 1.5;
+          outline: none;
+          resize: vertical;
+          transition: border-color 0.2s;
+        }
+        .cloud-input:focus {
+          border-color: var(--primary);
+        }
+        .pulse-dot {
+          width: 8px;
+          height: 8px;
+          background-color: #059669;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+        }
+      `}</style>
+
+      <div className="cloud-container">
+        
+        {/* Columna Izquierda: Estado de Conexión & Perfil */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          
+          <div className="cloud-card">
+            <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text)' }}>
+              Estado de la Conexión
+            </h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Servidor Cloud:</span>
+                {isFirebaseConfigured ? (
+                  <span className="cloud-badge-success">
+                    <span className="pulse-dot"></span> Conectado (Firebase)
+                  </span>
+                ) : (
+                  <span className="cloud-badge-danger">Offline (PIN Local)</span>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Sincronización:</span>
+                {fbUser ? (
+                  <span className="cloud-badge-success">Activa (En Vivo)</span>
+                ) : (
+                  <span className="cloud-badge-warning">Inactiva (Sin Sesión)</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="cloud-card" style={{ position: 'relative', overflow: 'hidden' }}>
+            {fbUser ? (
+              // Usuario Logueado
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
+                  {fbUser.photoURL ? (
+                    <img 
+                      src={fbUser.photoURL} 
+                      alt="Google Profile" 
+                      style={{ width: 68, height: 68, borderRadius: '50%', border: '3px solid var(--primary)', boxShadow: '0 4px 12px rgba(37,99,235,0.25)' }} 
+                    />
+                  ) : (
+                    <div style={{ 
+                      width: 68, height: 68, borderRadius: '50%', 
+                      background: 'linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%)',
+                      color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 24, fontWeight: 700, fontFamily: 'var(--font-headings)',
+                      boxShadow: '0 4px 12px rgba(37,99,235,0.25)'
+                    }}>
+                      {fbUser.displayName ? fbUser.displayName[0].toUpperCase() : fbUser.email[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ 
+                    position: 'absolute', bottom: 2, right: 2, width: 16, height: 16, 
+                    background: '#059669', border: '2.5px solid var(--surface)', borderRadius: '50%' 
+                  }} />
+                </div>
+
+                <h4 style={{ fontFamily: 'var(--font-headings)', fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>
+                  {fbUser.displayName || 'Usuario Financiero'}
+                </h4>
+                
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 14 }}>
+                  {fbUser.email}
+                </p>
+
+                <div style={{ 
+                  background: 'var(--background)', borderRadius: '8px', padding: '8px 12px', 
+                  fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)', 
+                  marginBottom: 20, border: '1px solid var(--border)', wordBreak: 'break-all' 
+                }}>
+                  ID Firestore: {fbUser.uid}
+                </div>
+
+                <button className="cloud-btn-danger-outline" onClick={onGoogleLogout} style={{ width: '100%' }}>
+                  Cerrar Sesión de forma Segura
+                </button>
+              </div>
+            ) : isFirebaseConfigured ? (
+              // Firebase configurado pero no logueado
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🔐</div>
+                <h4 style={{ fontFamily: 'var(--font-headings)', fontSize: 15.5, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
+                  Sincronización Cloud Protegida
+                </h4>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 16 }}>
+                  Inicia sesión con tu cuenta Google para habilitar el guardado y sincronización automática de tus credenciales y umbrales en tiempo real.
+                </p>
+
+                <button className="cloud-btn-google" onClick={onGoogleLogin}>
+                  <svg width="18" height="18" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.51 0-6.357-2.83-6.357-6.314s2.848-6.314 6.357-6.314c1.614 0 3.15.587 4.35 1.696l3.07-3.07C19.347 2.626 15.965 1.5 12.24 1.5 6.033 1.5 1 6.533 1 12.74s5.033 11.24 11.24 11.24c5.898 0 10.74-4.254 10.74-11.24 0-.668-.07-1.34-.2-1.995h-10.54z"/>
+                  </svg>
+                  <span>Conectar con Google</span>
+                </button>
+              </div>
+            ) : (
+              // Firebase sin configurar
+              <div style={{ padding: '10px 0' }}>
+                <div style={{ fontSize: 32, marginBottom: 12, textAlign: 'center' }}>☁️</div>
+                <h4 style={{ fontFamily: 'var(--font-headings)', fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 8, textAlign: 'center' }}>
+                  Modo Local Activado
+                </h4>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 14 }}>
+                  Actualmente no tienes configurado ningún servidor Firebase. Toda tu configuración se guardará únicamente de manera local en este navegador.
+                </p>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  Para activar la sincronización, pega tu configuración de Firebase en el panel de la derecha.
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Columna Derecha: Sync checklist & Firebase Form */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          
+          <div className="cloud-card">
+            <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text)' }}>
+              Elementos Sincronizados
+            </h3>
+            
+            <div className="cloud-sync-item">
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🔑 Gemini API Key</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>Tu clave API de Google AI Studio para chatbot</div>
+              </div>
+              {fbUser ? (
+                <span className="cloud-badge-success">Respaldado</span>
+              ) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-light)' }}>Solo local</span>
+              )}
+            </div>
+
+            <div className="cloud-sync-item">
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🔔 Umbrales de Alertas Financieras</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>Límites de caja, runway y plazos de créditos</div>
+              </div>
+              {fbUser ? (
+                <span className="cloud-badge-success">Respaldado</span>
+              ) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-light)' }}>Solo local</span>
+              )}
+            </div>
+
+            <div className="cloud-sync-item">
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🎨 Preferencias Generales</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>Esquema de color y vistas predeterminadas</div>
+              </div>
+              {fbUser ? (
+                <span className="cloud-badge-success">Respaldado</span>
+              ) : (
+                <span style={{ fontSize: 11.5, color: 'var(--text-light)' }}>Solo local</span>
+              )}
+            </div>
+          </div>
+
+          <div className="cloud-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+                Servidor Cloud Firebase
+              </h3>
+              {isFirebaseConfigured && (
+                <button 
+                  onClick={() => setShowConfigForm(!showConfigForm)}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--primary)',
+                    fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-main)'
+                  }}
+                >
+                  {showConfigForm ? 'Cancelar' : '⚙️ Editar Credenciales'}
+                </button>
+              )}
+            </div>
+
+            {showConfigForm ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  Pega el objeto JSON de tu aplicación web de Firebase (desde la Consola de Firebase &gt; Configuración del proyecto):
+                </p>
+                
+                <textarea 
+                  className="cloud-input"
+                  rows="7"
+                  placeholder={`{\n  "apiKey": "AIzaSy...",\n  "authDomain": "tu-proyecto.firebaseapp.com",\n  "projectId": "tu-proyecto",\n  "storageBucket": "tu-proyecto.firebasestorage.app",\n  "messagingSenderId": "...",\n  "appId": "..."\n}`}
+                  value={configInput}
+                  onChange={(e) => setConfigInput(e.target.value)}
+                />
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                  <button className="cloud-btn-primary" onClick={handleSaveConfig} style={{ flex: 1 }}>
+                    Guardar Configuración
+                  </button>
+                  {isFirebaseConfigured && (
+                    <button className="cloud-btn-danger-outline" onClick={handleDisconnectFirebase}>
+                      Desconectar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 12 }}>
+                  Tu dashboard está conectado al proyecto de Firebase: <strong style={{ color: 'var(--text)' }}>{config?.projectId || 'Desconocido'}</strong>.
+                </p>
+                <div style={{ 
+                  background: 'var(--background)', border: '1px solid var(--border)', 
+                  borderRadius: '6px', padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)'
+                }}>
+                  <div style={{ marginBottom: 4 }}><strong>API Key:</strong> ••••••••••••••••••••••</div>
+                  <div><strong>Auth Domain:</strong> {config?.authDomain}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isFirebaseConfigured && (
+            <div className="cloud-card" style={{ marginTop: 20 }}>
+              <h3 style={{ fontFamily: 'var(--font-headings)', fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text)' }}>
+                📜 Bitácora de Actividad Reciente
+              </h3>
+              
+              {!auditLogs || auditLogs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--t3)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+                  Sin eventos de auditoría registrados.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
+                  {auditLogs.map((log, idx) => {
+                    const isAjuste = log.tipo === 'ajuste';
+                    const isConcil = log.tipo === 'conciliacion';
+                    const isSeg = log.tipo === 'seguridad';
+                    
+                    const dotColor = isAjuste ? 'var(--primary)' : isConcil ? '#059669' : isSeg ? '#7c3aed' : 'var(--t3)';
+                    const bgBadge = isAjuste ? 'var(--primary-light)' : isConcil ? '#ecfdf5' : isSeg ? '#f5f3ff' : 'var(--background)';
+                    const borderBadge = isAjuste ? 'rgba(37,99,235,0.1)' : isConcil ? 'rgba(5,150,105,0.1)' : isSeg ? 'rgba(124,58,237,0.1)' : 'var(--border)';
+                    
+                    return (
+                      <div key={idx} style={{ display: 'flex', gap: 12, position: 'relative' }}>
+                        {idx !== auditLogs.length - 1 && (
+                          <div style={{ position: 'absolute', left: 5, top: 12, bottom: -20, width: 2, background: 'var(--border)' }} />
+                        )}
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, marginTop: 4, zIndex: 1, border: '2px solid var(--surface)' }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>{log.usuario}</span>
+                            <span style={{ fontSize: 10.5, color: 'var(--t3)' }}>
+                              {new Date(log.timestamp).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })} a las {new Date(log.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 }}>
+                            {log.accion}
+                          </p>
+                          <span style={{ 
+                            display: 'inline-block', fontSize: 9, fontWeight: 700, 
+                            color: dotColor, background: bgBadge, border: `1px solid ${borderBadge}`,
+                            padding: '1px 6px', borderRadius: 4, marginTop: 4, textTransform: 'uppercase'
+                          }}>
+                            {log.tipo}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
 
       </div>
