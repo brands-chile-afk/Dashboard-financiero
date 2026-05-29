@@ -379,8 +379,7 @@ const DEFAULT_FIREBASE_CONFIG = {
   projectId: "dashboard-93457",
   storageBucket: "dashboard-93457.firebasestorage.app",
   messagingSenderId: "207789889083",
-  appId: "1:207789889083:web:3577dda47c14abc9e42e1e",
-  databaseId: "ai-studio-378e0ada-f4d3-4d7c-a24e-fa418c9ffb9e"
+  appId: "1:207789889083:web:3577dda47c14abc9e42e1e"
 };
 
 // ── Variables Globales de Firebase ──
@@ -425,16 +424,8 @@ const initFirebaseInstance = (onUserChanged, onSyncData) => {
       firebaseApp = firebase.app();
     }
     
-    // Si la configuración incluye databaseId, la usamos; de lo contrario, si el projectId es 'dashboard-93457',
-    // usamos por defecto el ID de su base de datos de AI Studio para evitar el error de base de datos no existente.
-    const dbId = config.databaseId || (config.projectId === 'dashboard-93457' ? 'ai-studio-378e0ada-f4d3-4d7c-a24e-fa418c9ffb9e' : undefined);
-    
-    if (dbId) {
-      db = firebaseApp.firestore(dbId);
-    } else {
-      db = firebaseApp.firestore();
-    }
-    console.log("🔥 Firebase Firestore inicializado con éxito. Base de datos:", dbId || "(default)");
+    db = firebaseApp.firestore();
+    console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default).");
 
     firebase.auth().onAuthStateChanged((user) => {
       onUserChanged(user);
