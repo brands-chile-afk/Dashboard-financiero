@@ -62,7 +62,8 @@ const server = http.createServer((req, res) => {
   projectId: "${config.projectId}",
   storageBucket: "${config.storageBucket || ''}",
   messagingSenderId: "${config.messagingSenderId || ''}",
-  appId: "${config.appId || ''}"
+  appId: "${config.appId || ''}",
+  databaseId: "${config.databaseId || ''}"
 };`;
 
         html = html.substring(0, startIndex) + replacement + html.substring(endIndex);
