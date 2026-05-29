@@ -3476,10 +3476,22 @@ function HomePage({ saldos, movByMonth, gastos, ventas, creditos, fondos, alerts
 
 
 // ── App ──────────────────────────────────────────────────────────────────
-function PinLock({ onUnlock, onGoogleLogin, isFirebaseConfigured, loading, onReinitFirebase, accessDeniedReason, onClearAccessDenied }) {
+function PinLock({ 
+  onUnlock, 
+  onGoogleLogin, 
+  isFirebaseConfigured, 
+  loading, 
+  onReinitFirebase, 
+  accessDeniedReason, 
+  onClearAccessDenied,
+  lastFailedUser,
+  onRequestAccess
+}) {
   const [showConfigForm, setShowConfigForm] = useState(false);
   const [configInput, setConfigInput] = useState(() => localStorage.getItem('FIREBASE_CONFIG') || '');
   const [configError, setConfigError] = useState('');
+  const [requestStatus, setRequestStatus] = useState('idle'); // 'idle' | 'sending' | 'success' | 'error'
+  const [requestError, setRequestError] = useState('');
 
   const handleSaveConfig = () => {
     try {
@@ -3547,28 +3559,99 @@ function PinLock({ onUnlock, onGoogleLogin, isFirebaseConfigured, loading, onRei
           <p style={{fontSize:12.5, color:'rgba(255,255,255,0.7)', lineHeight:1.5, marginBottom:22}}>
             {isSuspended 
               ? 'Tu cuenta de usuario ha sido desactivada temporalmente por el administrador. Contacta al equipo para restablecer tu acceso.' 
-              : 'Esta cuenta de correo electrónico no está registrada en la lista de usuarios autorizados para ingresar al Dashboard.'}
+              : `La cuenta ${lastFailedUser ? lastFailedUser.email : 'de correo'} no está registrada en la lista de usuarios autorizados.`}
           </p>
+          
+          {!isSuspended && lastFailedUser && (
+            <div style={{width:'100%', marginTop:-10, marginBottom:16}}>
+              {requestStatus === 'idle' && (
+                <button
+                  onClick={async () => {
+                    setRequestStatus('sending');
+                    try {
+                      await onRequestAccess(lastFailedUser);
+                      setRequestStatus('success');
+                    } catch (err) {
+                      setRequestError(err.message || 'Error al conectar.');
+                      setRequestStatus('error');
+                    }
+                  }}
+                  style={{
+                    width:'100%',
+                    height:38,
+                    background: 'linear-gradient(135deg, oklch(52% .15 240) 0%, oklch(44% .14 240) 100%)',
+                    color:'#fff',
+                    border:'none',
+                    borderRadius:8,
+                    fontWeight:600,
+                    fontSize:12.5,
+                    cursor:'pointer',
+                    boxShadow:'0 4px 12px rgba(59,130,246,0.3)',
+                    transition:'all 0.15s',
+                    fontFamily:'\'DM Sans\', sans-serif'
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.transform='translateY(-1px)'}
+                  onMouseLeave={e=>e.currentTarget.style.transform='none'}
+                >
+                  Solicitar Acceso al Administrador
+                </button>
+              )}
+
+              {requestStatus === 'sending' && (
+                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'8px 0'}}>
+                  <div style={{width:16,height:16,border:'2px solid rgba(255,255,255,0.1)',borderTopColor:'oklch(60% .14 240)',borderRadius:'50%',animation:'spin 0.6s linear infinite'}}/>
+                  <span style={{fontSize:12.5,color:'rgba(255,255,255,0.8)'}}>Enviando solicitud...</span>
+                </div>
+              )}
+
+              {requestStatus === 'success' && (
+                <div style={{background:'rgba(16,185,129,0.1)',border:'1px solid #10b981',borderRadius:8,padding:12,textAlign:'left'}}>
+                  <div style={{color:'#34d399',fontWeight:700,fontSize:12.5,marginBottom:4,display:'flex',alignItems:'center',gap:6}}>
+                    <span>✓</span> ¡Solicitud Enviada!
+                  </div>
+                  <div style={{fontSize:11.5,color:'rgba(255,255,255,0.75)',lineHeight:1.4}}>
+                    Se ha notificado al administrador por correo electrónico. Te llegará un correo cuando se apruebe.
+                  </div>
+                </div>
+              )}
+
+              {requestStatus === 'error' && (
+                <div style={{background:'rgba(220,38,38,0.1)',border:'1px solid var(--red)',borderRadius:8,padding:12,textAlign:'left'}}>
+                  <div style={{color:'#ff8080',fontWeight:700,fontSize:12.5,marginBottom:4}}>
+                    ❌ Error al enviar solicitud
+                  </div>
+                  <div style={{fontSize:11.5,color:'rgba(255,255,255,0.7)',marginBottom:8}}>{requestError}</div>
+                  <button
+                    onClick={() => setRequestStatus('idle')}
+                    style={{background:'rgba(255,255,255,0.15)',border:'none',borderRadius:4,color:'#fff',fontSize:11,fontWeight:600,padding:'4px 8px',cursor:'pointer'}}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <button 
             onClick={onClearAccessDenied}
             style={{
               width:'100%',
               height:38,
-              background:'var(--red)',
+              background: (!isSuspended && requestStatus === 'success') ? 'var(--g700)' : 'var(--red)',
               color:'#fff',
               border:'none',
               borderRadius:8,
               fontWeight:600,
               fontSize:12.5,
               cursor:'pointer',
-              boxShadow:'0 4px 12px rgba(220,38,38,0.3)',
+              boxShadow: (!isSuspended && requestStatus === 'success') ? 'none' : '0 4px 12px rgba(220,38,38,0.3)',
               transition:'background 0.15s',
               fontFamily:'\'DM Sans\', sans-serif'
             }}
-            onMouseEnter={e=>e.currentTarget.style.background='oklch(50% .18 25)'}
-            onMouseLeave={e=>e.currentTarget.style.background='var(--red)'}
+            onMouseEnter={e=>e.currentTarget.style.background=(!isSuspended && requestStatus === 'success') ? 'var(--g600)' : 'oklch(50% .18 25)'}
+            onMouseLeave={e=>e.currentTarget.style.background=(!isSuspended && requestStatus === 'success') ? 'var(--g700)' : 'var(--red)'}
           >
-            Volver a Intentar
+            {(!isSuspended && requestStatus === 'success') ? 'Volver' : 'Volver a Intentar'}
           </button>
         </div>
       )}
@@ -3720,6 +3803,8 @@ function App() {
   const [allowedModules, setAllowedModules] = useState(['home']);
   const [fbUserRole, setFbUserRole] = useState('Visualizador');
   const [accessDeniedReason, setAccessDeniedReason] = useState(null); // 'not_allowed' | 'suspended' | null
+  const [lastFailedUser, setLastFailedUser] = useState(null); // { email, nombre }
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   
   const [manualAdjustments, setManualAdjustments] = useState(() => {
     try {
@@ -3769,6 +3854,39 @@ function App() {
       await saveConfigToCloud(null, null, { auditLogs: updatedLogs });
     } catch (e) {
       console.error("Error al registrar evento de auditoría:", e);
+    }
+  };
+
+  const handleRequestAccess = async (failedUser) => {
+    if (!db || !failedUser || !failedUser.email) return;
+    const emailClean = failedUser.email.toLowerCase().trim();
+    try {
+      await db.collection("access_requests").doc(emailClean).set({
+        email: emailClean,
+        nombre: failedUser.nombre || emailClean,
+        fechaSolicitud: firebase.firestore.FieldValue.serverTimestamp(),
+        estado: 'pendiente'
+      });
+
+      await db.collection("mail").add({
+        to: ['brandon.villarroelcl@gmail.com', 'vandito321@gmail.com'],
+        message: {
+          subject: '🔔 Nueva Solicitud de Acceso - Dashboard Financiero',
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #1e293b; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+              <h2 style="color: oklch(52% .15 240); margin-top: 0;">Nueva solicitud de acceso recibida</h2>
+              <p>El usuario <strong>${failedUser.nombre || emailClean}</strong> (${emailClean}) está intentando ingresar al Dashboard Financiero y ha solicitado permisos.</p>
+              <p>Para gestionar esta solicitud, ingresa al panel de administración <strong>Accesos y Roles</strong> en el Dashboard Financiero.</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Este es un correo automático enviado por tu Dashboard Financiero.</p>
+            </div>
+          `
+        }
+      });
+      return true;
+    } catch (err) {
+      console.error("Error al solicitar acceso:", err);
+      throw err;
     }
   };
 
@@ -3878,6 +3996,7 @@ function App() {
                 const data = doc.data();
                 if (data.activo === false) {
                   setAccessDeniedReason('suspended');
+                  setLastFailedUser({ email: user.email, nombre: user.displayName || user.email });
                   setFbUser(null);
                   setFbLoading(false);
                   setLocked(true);
@@ -3887,10 +4006,12 @@ function App() {
                   setFbUserRole(data.rol || 'Visualizador');
                   setAllowedModules(data.modulos && data.modulos.length ? data.modulos : ['home']);
                   setAccessDeniedReason(null);
+                  setLastFailedUser(null);
                   setLocked(false);
                 }
               } else {
                 setAccessDeniedReason('not_allowed');
+                setLastFailedUser({ email: user.email, nombre: user.displayName || user.email });
                 setFbUser(null);
                 setFbLoading(false);
                 setLocked(true);
@@ -3918,6 +4039,22 @@ function App() {
       }
     }
   }, [isFirebaseConfigured]);
+
+  // Escuchador en tiempo real para solicitudes de acceso pendientes (solo para Administradores)
+  useEffect(() => {
+    if (!db || fbUserRole !== 'Administrador') {
+      setPendingRequestsCount(0);
+      return;
+    }
+    const unsubscribe = db.collection("access_requests")
+      .where("estado", "==", "pendiente")
+      .onSnapshot((snapshot) => {
+        setPendingRequestsCount(snapshot.size);
+      }, (err) => {
+        console.error("Error al escuchar solicitudes pendientes:", err);
+      });
+    return unsubscribe;
+  }, [fbUserRole]);
 
   // Enrutamiento seguro: Redirigir si se intenta acceder a una pestaña no permitida
   useEffect(() => {
@@ -4296,6 +4433,8 @@ function App() {
       onReinitFirebase={handleReinitFirebase}
       accessDeniedReason={accessDeniedReason}
       onClearAccessDenied={() => setAccessDeniedReason(null)}
+      lastFailedUser={lastFailedUser}
+      onRequestAccess={handleRequestAccess}
     />
   );
 
@@ -4347,6 +4486,9 @@ function App() {
               <div className="ni-label">{n.label}</div>
               {n.id==='home' && visibleAlerts.length>0 && (
                 <div style={{marginLeft:'auto',background:'var(--red)',borderRadius:99,minWidth:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',padding:'0 4px'}}>{visibleAlerts.length}</div>
+              )}
+              {n.id==='usuarios' && pendingRequestsCount > 0 && (
+                <div style={{marginLeft:'auto',background:'var(--red)',borderRadius:99,minWidth:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',padding:'0 4px'}}>{pendingRequestsCount}</div>
               )}
             </div>
           ))}
@@ -4469,9 +4611,6 @@ function App() {
 }
 
 
-}
-
-
 // ── Usuarios Page Component ──
 function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
   const [users, setUsers] = useState([]);
@@ -4489,6 +4628,7 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
   const [formModulos, setFormModulos] = useState(['home']);
   const [formActivo, setFormActivo] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [accessRequests, setAccessRequests] = useState([]);
 
   useEffect(() => {
     if (!db) return;
@@ -4513,6 +4653,74 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
     );
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsubscribe = db.collection("access_requests")
+      .where("estado", "==", "pendiente")
+      .onSnapshot(
+        (snapshot) => {
+          const reqs = [];
+          snapshot.forEach(doc => {
+            reqs.push({ id: doc.id, ...doc.data() });
+          });
+          reqs.sort((a, b) => {
+            const tA = a.fechaSolicitud ? (a.fechaSolicitud.seconds * 1000 || new Date(a.fechaSolicitud).getTime()) : 0;
+            const tB = b.fechaSolicitud ? (b.fechaSolicitud.seconds * 1000 || new Date(b.fechaSolicitud).getTime()) : 0;
+            return tB - tA;
+          });
+          setAccessRequests(reqs);
+        },
+        (err) => {
+          console.error("Error fetching access requests:", err);
+        }
+      );
+    return unsubscribe;
+  }, []);
+
+  const handleApproveRequest = async (request) => {
+    if (!db) return;
+    const emailClean = request.email.toLowerCase().trim();
+    try {
+      const newUser = {
+        email: emailClean,
+        nombre: request.nombre || emailClean,
+        rol: 'Visualizador',
+        modulos: ['home', 'mov'],
+        activo: true,
+        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection("allowed_users").doc(emailClean).set(newUser);
+      await db.collection("access_requests").doc(emailClean).update({
+        estado: 'aprobado',
+        aprobadoPor: fbUser ? fbUser.email : 'Administrador',
+        fechaResolucion: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await logAuditEvent(`Aprobó acceso para el usuario solicitante ${emailClean} con rol Visualizador`, 'seguridad');
+      alert(`✅ Acceso aprobado con éxito para ${emailClean}.`);
+    } catch (err) {
+      console.error("Error al aprobar solicitud:", err);
+      alert("Error al aprobar acceso: " + err.message);
+    }
+  };
+
+  const handleRejectRequest = async (request) => {
+    if (!db) return;
+    if (!confirm(`¿Estás seguro de que deseas rechazar la solicitud de acceso de ${request.email}?`)) return;
+    const emailClean = request.email.toLowerCase().trim();
+    try {
+      await db.collection("access_requests").doc(emailClean).update({
+        estado: 'rechazado',
+        rechazadoPor: fbUser ? fbUser.email : 'Administrador',
+        fechaResolucion: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await logAuditEvent(`Rechazó acceso para el usuario solicitante ${emailClean}`, 'seguridad');
+      alert(`🔴 Solicitud de ${emailClean} rechazada.`);
+    } catch (err) {
+      console.error("Error al rechazar solicitud:", err);
+      alert("Error al rechazar acceso: " + err.message);
+    }
+  };
 
   const handleOpenAdd = () => {
     setEditingUser(null);
@@ -5141,6 +5349,129 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
           </div>
         </div>
       </div>
+
+      {/* Solicitudes de Acceso Pendientes Box */}
+      {accessRequests.length > 0 && (
+        <div style={{
+          background: 'rgba(245,158,11,0.03)',
+          border: '1.5px dashed rgba(245,158,11,0.25)',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+          boxShadow: '0 8px 32px rgba(245,158,11,0.04)',
+          animation: 'fadeUp 0.3s ease-out'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 18 }}>📩</span>
+            <h3 style={{ fontSize: 14.5, fontWeight: 700, color: '#f59e0b', margin: 0 }}>
+              Solicitudes de Acceso Pendientes ({accessRequests.length})
+            </h3>
+            <span style={{
+              fontSize: 10.5,
+              background: 'rgba(245,158,11,0.15)',
+              color: '#fbbf24',
+              padding: '2px 8px',
+              borderRadius: '99px',
+              fontWeight: 600,
+              marginLeft: 'auto'
+            }}>Requiere Acción</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {accessRequests.map((req) => {
+              const reqDate = req.fechaSolicitud
+                ? new Date(req.fechaSolicitud.seconds * 1000 || req.fechaSolicitud).toLocaleString('es-CL', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                  })
+                : 'Recién solicitado';
+
+              return (
+                <div key={req.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  padding: '12px 16px',
+                  gap: 16,
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, oklch(72% .18 75) 0%, oklch(62% .15 75) 100%)',
+                      color: 'var(--g900)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 13
+                    }}>
+                      {(req.nombre || req.email).substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'white', fontSize: 13.5 }}>{req.nombre || 'Usuario'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--g400)', marginTop: 2 }}>{req.email}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11.5, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🕒</span> {reqDate}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleApproveRequest(req)}
+                      style={{
+                        background: '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        transition: 'transform 0.15s'
+                      }}
+                      onMouseEnter={e=>e.currentTarget.style.transform='scale(1.03)'}
+                      onMouseLeave={e=>e.currentTarget.style.transform='none'}
+                    >
+                      🟢 Aprobar
+                    </button>
+                    <button
+                      onClick={() => handleRejectRequest(req)}
+                      style={{
+                        background: 'rgba(239,68,68,0.15)',
+                        border: '1px solid rgba(239,68,68,0.3)',
+                        color: '#f87171',
+                        borderRadius: 6,
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        transition: 'transform 0.15s'
+                      }}
+                      onMouseEnter={e=>e.currentTarget.style.transform='scale(1.03)'}
+                      onMouseLeave={e=>e.currentTarget.style.transform='none'}
+                    >
+                      🔴 Rechazar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="usr-table-card">
