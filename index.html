@@ -4753,24 +4753,36 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
     };
 
     try {
-      const newUser = {
-        email: emailClean,
-        nombre: request.nombre || emailClean,
-        rol: 'Visualizador',
-        modulos: ['home', 'mov'],
-        activo: true,
-        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+      const token = await firebase.auth().currentUser.getIdToken();
+      
+      console.log("[Aprobar] Escribiendo en allowed_users (REST API)...");
+      const isoDate = new Date().toISOString();
+      const userPayload = {
+        fields: {
+          email: { stringValue: emailClean },
+          nombre: { stringValue: request.nombre || emailClean },
+          rol: { stringValue: 'Visualizador' },
+          activo: { booleanValue: true },
+          modulos: { arrayValue: { values: [{ stringValue: 'home' }, { stringValue: 'mov' }] } },
+          creadoEn: { timestampValue: isoDate }
+        }
       };
       
-      console.log("[Aprobar] Escribiendo en allowed_users...");
-      await withTimeout(db.collection("allowed_users").doc(emailClean).set(newUser), 8000, 'set newUser');
+      let restUrl = `https://firestore.googleapis.com/v1/projects/dashboard-93457/databases/(default)/documents/allowed_users/${encodeURIComponent(emailClean)}?updateMask.fieldPaths=email&updateMask.fieldPaths=nombre&updateMask.fieldPaths=rol&updateMask.fieldPaths=activo&updateMask.fieldPaths=modulos&updateMask.fieldPaths=creadoEn`;
+      let resp = await fetch(restUrl, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(userPayload) });
+      if (!resp.ok) throw new Error("Fallo al escribir allowed_users: " + await resp.text());
       
-      console.log("[Aprobar] Actualizando access_requests...");
-      await withTimeout(db.collection("access_requests").doc(emailClean).update({
-        estado: 'aprobado',
-        aprobadoPor: fbUser ? fbUser.email : 'Administrador',
-        fechaResolucion: firebase.firestore.FieldValue.serverTimestamp()
-      }), 8000, 'update access_requests');
+      console.log("[Aprobar] Actualizando access_requests (REST API)...");
+      const requestPayload = {
+        fields: {
+          estado: { stringValue: 'aprobado' },
+          aprobadoPor: { stringValue: fbUser ? fbUser.email : 'Administrador' },
+          fechaResolucion: { timestampValue: isoDate }
+        }
+      };
+      restUrl = `https://firestore.googleapis.com/v1/projects/dashboard-93457/databases/(default)/documents/access_requests/${encodeURIComponent(emailClean)}?updateMask.fieldPaths=estado&updateMask.fieldPaths=aprobadoPor&updateMask.fieldPaths=fechaResolucion`;
+      resp = await fetch(restUrl, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(requestPayload) });
+      if (!resp.ok) throw new Error("Fallo al actualizar access_requests: " + await resp.text());
       
       console.log("[Aprobar] Registrando auditoría...");
       await logAuditEvent(`Aprobó acceso para el usuario solicitante ${emailClean} con rol Visualizador`, 'seguridad');
@@ -4955,9 +4967,42 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
         userPayload.creadoEn = isoDate;
       }
 
-      console.log("[handleSave] Guardando en allowed_users...");
-      await withTimeout(db.collection("allowed_users").doc(emailClean).set(userPayload, { merge: true }), 8000, 'set allowed_users');
+      console.log("[handleSave] Guardando en allowed_users (Vía REST API)...");
+      const token = await firebase.auth().currentUser.getIdToken();
       
+      const firestorePayload = {
+        fields: {
+          email: { stringValue: userPayload.email },
+          nombre: { stringValue: userPayload.nombre },
+          rol: { stringValue: userPayload.rol },
+          activo: { booleanValue: userPayload.activo },
+          modulos: {
+            arrayValue: { values: userPayload.modulos.map(m => ({ stringValue: m })) }
+          },
+          actualizadoEn: { timestampValue: userPayload.actualizadoEn }
+        }
+      };
+      if (userPayload.creadoEn) {
+        firestorePayload.fields.creadoEn = { timestampValue: userPayload.creadoEn };
+      }
+
+      const restUrl = `https://firestore.googleapis.com/v1/projects/dashboard-93457/databases/(default)/documents/allowed_users/${encodeURIComponent(emailClean)}?updateMask.fieldPaths=email&updateMask.fieldPaths=nombre&updateMask.fieldPaths=rol&updateMask.fieldPaths=activo&updateMask.fieldPaths=modulos&updateMask.fieldPaths=actualizadoEn` + (userPayload.creadoEn ? `&updateMask.fieldPaths=creadoEn` : ``);
+
+      const response = await fetch(restUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(firestorePayload)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Fallo de red en REST API: ${response.status} - ${errText}`);
+      }
+      console.log("[handleSave] Guardado en REST exitoso.");
+
       console.log("[handleSave] Registrando auditoría...");
       await logAuditEvent(`${editingUser ? 'Actualizó' : 'Creó'} acceso para el usuario ${emailClean} (${formRol})`, 'seguridad');
       
