@@ -4934,13 +4934,14 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
     };
 
     try {
+      const isoDate = new Date().toISOString();
       const userPayload = {
         email: emailClean,
         nombre: nombreClean,
         rol: formRol,
         modulos: formModulos,
         activo: formActivo,
-        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        actualizadoEn: isoDate
       };
 
       if (!editingUser) {
@@ -4951,7 +4952,7 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
           setSaving(false);
           return;
         }
-        userPayload.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+        userPayload.creadoEn = isoDate;
       }
 
       console.log("[handleSave] Guardando en allowed_users...");
