@@ -425,7 +425,14 @@ const initFirebaseInstance = (onUserChanged, onSyncData) => {
     }
     
     db = firebaseApp.firestore();
-    console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default).");
+    
+    // Forzar Long Polling para evitar que WebSockets se queden colgados (bloqueados por antivirus o Brave Shields)
+    db.settings({
+      experimentalForceLongPolling: true,
+      useFetchStreams: false
+    });
+    
+    console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default) usando Long Polling.");
 
     firebase.auth().onAuthStateChanged((user) => {
       onUserChanged(user);
