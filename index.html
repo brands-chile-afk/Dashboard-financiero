@@ -425,14 +425,7 @@ const initFirebaseInstance = (onUserChanged, onSyncData) => {
     }
     
     db = firebaseApp.firestore();
-    
-    // Forzar Long Polling para evitar que WebSockets se queden colgados (bloqueados por antivirus o Brave Shields)
-    db.settings({
-      experimentalForceLongPolling: true,
-      useFetchStreams: false
-    });
-    
-    console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default) usando Long Polling.");
+    console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default).");
 
     firebase.auth().onAuthStateChanged((user) => {
       onUserChanged(user);
@@ -4917,6 +4910,14 @@ function UsuariosPage({ fbUser, logAuditEvent, navItems }) {
 
     setSaving(true);
     console.log("[handleSave] Iniciando guardado para:", emailClean);
+    
+    // Forzar reconexión explícita a la red en caso de que Firebase se haya dormido o desconectado
+    try {
+      await db.enableNetwork();
+      console.log("[handleSave] Red forzada a ON.");
+    } catch(e) {
+      console.warn("No se pudo forzar la red:", e);
+    }
     
     // Función helper para evitar cuelgues infinitos (timeout de 8 segundos)
     const withTimeout = (promise, ms, name) => {
