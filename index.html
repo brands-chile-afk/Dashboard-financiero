@@ -6051,7 +6051,8 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           label: mLabel,
           inicial: saldoInicial,
           cobros: cobranzaProyectada,
-          egresos: fijosDia + gastosDia + finiquitosDia,
+          fijos: fijosDia + finiquitosDia,
+          cheques: gastosDia,
           nomina: sueldosDia,
           creditos: creditosDia,
           flujo: flujoNeto,
@@ -6112,7 +6113,8 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           label: mLabel,
           inicial: saldoInicial,
           cobros: cobranzaProyectada,
-          egresos: fijosMensual + gastosMes + finiquitosMes,
+          fijos: fijosMensual + finiquitosMes,
+          cheques: gastosMes,
           nomina: sueldosMensual,
           creditos: creditosMes,
           flujo: flujoNeto,
@@ -6278,7 +6280,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
               </label>
               <label className="sim-checkbox-label">
                 <input type="checkbox" checked={incluirGastos} onChange={e=>setIncluirGastos(e.target.checked)}/>
-                Compras Variables
+                Cheques / Gastos Var.
               </label>
             </div>
           </div>
@@ -6318,7 +6320,8 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
                   <th>Periodo</th>
                   <th>Saldo Inicial</th>
                   <th>(+) Cobros</th>
-                  <th>(-) Egresos</th>
+                  <th>(-) Fijos/Finiq.</th>
+                  <th>(-) Cheques/Var.</th>
                   <th>(-) Nómina</th>
                   <th>(-) Créditos</th>
                   <th>(=) Neto</th>
@@ -6331,7 +6334,8 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
                     <td style={{fontWeight:600}}>{row.label}</td>
                     <td>{fmt(row.inicial)}</td>
                     <td style={{color:'var(--g600)',fontWeight:500}}>+{fmt(row.cobros)}</td>
-                    <td style={{color:'var(--red)'}}>-{fmt(row.egresos)}</td>
+                    <td style={{color:'var(--red)'}}>-{fmt(row.fijos)}</td>
+                    <td style={{color:'var(--red)'}}>-{fmt(row.cheques)}</td>
                     <td style={{color:'var(--red)'}}>-{fmt(row.nomina)}</td>
                     <td style={{color:'var(--red)'}}>-{fmt(row.creditos)}</td>
                     <td style={{fontWeight:600,color:row.flujo>=0?'var(--g600)':'var(--red)'}}>
