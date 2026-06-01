@@ -888,7 +888,7 @@ function MovimientosTable({
         <tbody>
           {filtrados.length === 0
             ? <tr><td colSpan={6} style={{textAlign:'center',color:'var(--t3)',padding:'24px 0',fontStyle:'italic'}}>Sin resultados para los filtros aplicados</td></tr>
-            : filtrados.map((m,i)=>{
+            : filtrados.slice(0, 50).map((m,i)=>{
                 const desc = (m.descripcion || '').toLowerCase();
                 const isRescate = desc.includes('rescate') && (desc.includes('fondo') || desc.includes('ffmm') || desc.includes('mutuo'));
                 const recVal = reconciliations[getMovKey(m)];
@@ -975,6 +975,13 @@ function MovimientosTable({
                 );
               })
           }
+          {filtrados.length > 50 && (
+            <tr>
+              <td colSpan={6} style={{textAlign:'center', color:'var(--t3)', padding:'12px', fontSize:13, background:'var(--bg)'}}>
+                Mostrando los primeros 50 movimientos de {filtrados.length}. Usa los filtros para refinar tu búsqueda.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -1617,7 +1624,7 @@ function GastosPage({ nominaVer }) {
         <table className="tbl">
           <thead><tr><th>Fecha Pago</th><th>Proveedor</th><th className="r">Monto</th><th>Estado</th><th>Alerta</th></tr></thead>
           <tbody>
-            {(tab==='pendiente'?pendientes:pagados).map((g,i)=>{
+            {(tab==='pendiente'?pendientes:pagados).slice(0, 100).map((g,i)=>{
               const dias = Math.round((new Date(g.fecha) - new Date()) / 86400000);
               const esVencido  = dias < 0;
               const esHoy      = dias === 0;
@@ -1645,6 +1652,13 @@ function GastosPage({ nominaVer }) {
                 </tr>
               );
             })}
+            {(tab==='pendiente'?pendientes:pagados).length > 100 && (
+              <tr>
+                <td colSpan={5} style={{textAlign:'center', color:'var(--t3)', padding:'12px', fontSize:13, background:'var(--bg)'}}>
+                  Mostrando los primeros 100 gastos de {(tab==='pendiente'?pendientes:pagados).length}.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -1953,7 +1967,7 @@ function VentasPage({ onUpload, dataLoaded }) {
                   {hayBusqueda ? `Sin resultados para "${busqueda}" — verifica el folio o nombre exacto del Excel` : 'Sin documentos'}
                 </td></tr>
               )}
-              {pendientesFiltrados.map((r,i)=>{
+              {pendientesFiltrados.slice(0, 100).map((r,i)=>{
                 const vencido = r.diasVencido > 0;
                 const critico = r.diasVencido > 30;
                 return(
@@ -1970,6 +1984,13 @@ function VentasPage({ onUpload, dataLoaded }) {
                   </tr>
                 );
               })}
+              {pendientesFiltrados.length > 100 && (
+                <tr>
+                  <td colSpan={7} style={{textAlign:'center', color:'var(--t3)', padding:'12px', fontSize:13, background:'var(--bg)'}}>
+                    Mostrando los primeros 100 documentos de {pendientesFiltrados.length}. Usa el buscador para filtrar.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
