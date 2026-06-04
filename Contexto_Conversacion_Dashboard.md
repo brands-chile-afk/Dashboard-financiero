@@ -118,5 +118,13 @@ El servidor de desarrollo se ejecuta localmente mediante Node con 'npm start' (n
 - server.js (Servidor local)
 - Contexto_Conversacion_Dashboard.md (Este archivo detallado de contexto)
 
-Por favor, confirma que has absorbido y comprendido esta estructura y el estado de avance. Estoy listo para continuar trabajando en el dashboard contigo. ¿Qué sugerencias o mejoras te gustaría implementar ahora?
+Por favor, confirma que has absorbido y comprendido esta estructura y el estado de avance. Estoy listo para continuar trabajando en el dashboard contigo.
+
+Nuestro próximo objetivo (Roadmap Fase 3) es implementar las siguientes características que transformarán el Dashboard en un asistente activo:
+1. Módulo de Tareas Inteligente (To-Do Automatizado): Leer los GASTOS_FIJOS_DATA y generar alertas o un checklist interactivo basado en el día actual (ej. "Pagar Maestro" el día 5), que permita marcar las tareas como completadas (guardando el estado en Firestore).
+2. Plantillas de WhatsApp para Cobranza Crítica: Añadir un botón en la pestaña de Ventas para clientes con +15 días de vencimiento que abra automáticamente WhatsApp Web con un mensaje de cobro pre-armado.
+3. Termómetro de Metas de Facturación: Un indicador visual en la página de Resumen que compare la facturación actual del mes vs una Meta de Ventas configurable.
+4. Ingreso Rápido de Egresos sin Excel: Un botón flotante o formulario en la UI para registrar gastos exprés directamente hacia la nube, sin tener que abrir la hoja de Google Sheets.
+
+¿Con cuál de estos 4 puntos te gustaría que empecemos a trabajar primero? Por favor propón una breve ruta de acción para inicializar.
 ```
