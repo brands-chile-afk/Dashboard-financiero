@@ -427,6 +427,17 @@ const initFirebaseInstance = (onUserChanged, onSyncData) => {
     db = firebaseApp.firestore();
     console.log("🔥 Firebase Firestore inicializado con éxito. Conectado a (default).");
 
+    firebase.auth().getRedirectResult().then((result) => {
+      if (result && result.credential) {
+        const token = result.credential.accessToken;
+        sessionStorage.setItem('google_access_token', token);
+        window.googleAccessToken = token;
+        console.log("🎟️ Google access token stored from redirect");
+      }
+    }).catch((error) => {
+      console.error("Error getting redirect result:", error);
+    });
+
     firebase.auth().onAuthStateChanged((user) => {
       onUserChanged(user);
       if (user) {
@@ -541,6 +552,7 @@ let SUELDOS_DATA = [];      // { nombre, monto, dia_pago } — desde Google Shee
 let GASTOS_FIJOS_DATA = []; // { descripcion, monto, dia_pago, categoria } — desde Google Sheets
 let NOMINA_DATA = [];       // { empresa, personas, monto } — desde Excel nómina mensual
 let NOMINA_MES  = '';       // ej. 'Marzo 2026' — para mostrar en UI
+let ANTICIPOS_DATA = [];    // { empresa, personas, monto } — 2da tabla (anticipos) de la hoja SUELDOS
 // ↓ Pega los GIDs de las pestañas SUELDOS y GASTOS_FIJOS aquí una vez que las crees
 const GID_SUELDOS = '998795265';
 const GID_GASTOS_FIJOS = '1222067969';
@@ -1307,19 +1319,149 @@ function MovimientosPage({
   );
 }
 
-function GastosFijosCard() {
+function GastosFijosCard({ fbUser }) {
+  const { useState, useEffect, useMemo } = React;
   const hoyGF = new Date();
   const meses3GF = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const totalFijo = GASTOS_FIJOS_DATA.reduce((s,g)=>s+g.monto,0);
+  
+  const currentMonthStr = `${hoyGF.getFullYear()}-${String(hoyGF.getMonth() + 1).padStart(2, '0')}`;
+  
+  const getTodayStr = () => {
+    const y = hoyGF.getFullYear();
+    const m = String(hoyGF.getMonth() + 1).padStart(2, '0');
+    const d = String(hoyGF.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
-  // Calcular próxima fecha de cada gasto fijo
-  const conFecha = GASTOS_FIJOS_DATA.map(g => {
-    const yr=hoyGF.getFullYear(), mo=hoyGF.getMonth();
-    let p = new Date(yr,mo,g.dia_pago||30);
-    if(p < hoyGF) p = new Date(yr,mo+1,g.dia_pago||30);
-    const dias = Math.round((p-hoyGF)/86400000);
-    return {...g, proxFecha:p, dias};
-  }).sort((a,b)=>a.dias-b.dias);
+  const [completedTasks, setCompletedTasks] = useState({});
+  const [showPaymentModal, setShowPaymentModal] = useState(null);
+  const [paymentDate, setPaymentDate] = useState(getTodayStr());
+  const [payerName, setPayerName] = useState(fbUser ? fbUser.email : '');
+
+  useEffect(() => {
+    if (!db) {
+      // Modo sin conexión: Cargar desde localStorage
+      try {
+        const saved = localStorage.getItem(`offline_tasks_${currentMonthStr}`);
+        if (saved) setCompletedTasks(JSON.parse(saved));
+      } catch (e) {}
+      return;
+    }
+    const unsubscribe = db.collection('completed_tasks')
+      .where('mes', '==', currentMonthStr)
+      .onSnapshot((snapshot) => {
+        const dict = {};
+        snapshot.forEach(doc => { 
+          const d = doc.data();
+          dict[d.taskId] = { 
+            completed: true, 
+            fechaPago: d.fechaPago, 
+            quienPago: d.completedBy 
+          }; 
+        });
+        setCompletedTasks(dict);
+      }, (err) => console.error("Error fetching completed tasks:", err));
+    return unsubscribe;
+  }, [currentMonthStr, db]);
+
+  const toggleTask = async (task, isCompleted, extraData = {}) => {
+    // Actualización optimista
+    setCompletedTasks(prev => {
+      const next = { ...prev };
+      if (isCompleted) delete next[task.taskIdStr];
+      else next[task.taskIdStr] = { 
+        completed: true, 
+        fechaPago: extraData.fechaPago || getTodayStr(), 
+        quienPago: extraData.quienPago || (fbUser ? fbUser.email : 'Local') 
+      };
+      
+      // Guardar también en localStorage como respaldo (modo sin conexión)
+      localStorage.setItem(`offline_tasks_${currentMonthStr}`, JSON.stringify(next));
+      return next;
+    });
+
+    // Si no hay conexión a Firebase, terminamos aquí (se usará localStorage)
+    if (!db || !fbUser) {
+      return;
+    }
+
+    try {
+      if (isCompleted) {
+        const snapshot = await db.collection('completed_tasks')
+          .where('taskId', '==', task.taskIdStr)
+          .get();
+        const deletePromises = [];
+        snapshot.forEach(doc => deletePromises.push(doc.ref.delete()));
+        await Promise.all(deletePromises);
+      } else {
+        await db.collection('completed_tasks').add({
+          taskId: task.taskIdStr,
+          mes: currentMonthStr,
+          descripcion: task.descripcion,
+          completedBy: extraData.quienPago || fbUser.email,
+          fechaPago: extraData.fechaPago || getTodayStr(),
+          completedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    } catch (e) {
+      console.error("Error toggling task:", e);
+      alert("Detalle del error: " + e.message);
+      // Revertir en caso de error
+      setCompletedTasks(prev => {
+        const next = { ...prev };
+        if (isCompleted) next[task.taskIdStr] = { completed: true }; // simplification for rollback
+        else delete next[task.taskIdStr];
+        return next;
+      });
+    }
+  };
+
+  const confirmPayment = async () => {
+    const task = showPaymentModal;
+    if (!task) return;
+    setShowPaymentModal(null);
+    await toggleTask(task, false, { fechaPago: paymentDate, quienPago: payerName });
+  };
+
+  const handleSyncToCalendar = (task) => {
+    const year = hoyGF.getFullYear();
+    const month = hoyGF.getMonth();
+    const formatLocalDate = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}${m}${d}`;
+    };
+    const eventDate = new Date(year, month, task.dia_pago);
+    const startStr = formatLocalDate(eventDate);
+    const nextDate = new Date(year, month, task.dia_pago + 1);
+    const endStr = formatLocalDate(nextDate);
+
+    const title = encodeURIComponent(`Pago: ${task.descripcion}`);
+    const details = encodeURIComponent(`Pago recurrente de Gasto Fijo.\nMonto: $${task.monto.toLocaleString('es-CL')}\nCategoría: ${task.categoria||'Otros'}\n\nCreado automáticamente desde el Dashboard Financiero.`);
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}`;
+    
+    window.open(url, '_blank');
+  };
+
+  const conFecha = useMemo(() => {
+    return GASTOS_FIJOS_DATA.map(g => {
+      const yr=hoyGF.getFullYear(), mo=hoyGF.getMonth();
+      let p = new Date(yr,mo,g.dia_pago||30);
+      if(p < hoyGF) p = new Date(yr,mo+1,g.dia_pago||30);
+      const dias = Math.round((p-hoyGF)/86400000);
+      
+      const taskIdStr = `${g.descripcion.replace(/[^a-zA-Z0-9]/g, '_')}-${currentMonthStr}`;
+      const isCompleted = !!completedTasks[taskIdStr];
+      const details = completedTasks[taskIdStr] || null;
+      
+      return {...g, proxFecha:p, dias, taskIdStr, isCompleted, details};
+    }).sort((a,b) => {
+      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+      return a.dias - b.dias;
+    });
+  }, [completedTasks, currentMonthStr]);
 
   // Categorías únicas para resumen
   const porCategoria = {};
@@ -1334,9 +1476,12 @@ function GastosFijosCard() {
   const urgCol = d => d<=0?'var(--red)':d<=2?'oklch(45% .17 75)':d<=7?'oklch(52% .15 75)':'var(--t3)';
   const urgTag = d => d<0?<span style={{fontSize:11,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'1px 6px',borderRadius:4}}>🔴 Vencido</span>
     :d===0?<span style={{fontSize:11,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'1px 6px',borderRadius:4}}>🔴 Hoy</span>
-    :d<=2?<span style={{fontSize:11,fontWeight:700,color:'oklch(45% .17 75)',background:'var(--amber-bg)',padding:'1px 6px',borderRadius:4}}>🟠 {d}d</span>
-    :d<=7?<span style={{fontSize:11,fontWeight:600,color:'oklch(52% .15 75)',background:'oklch(98% .04 90)',padding:'1px 6px',borderRadius:4}}>🟡 {d}d</span>
+    :d<=2?<span style={{fontSize:11,fontWeight:700,color:'oklch(45% .17 75)',background:'var(--amber-bg)',padding:'1px 6px',borderRadius:4}}>🟠 ${d}d</span>
+    :d<=7?<span style={{fontSize:11,fontWeight:600,color:'oklch(52% .15 75)',background:'oklch(98% .04 90)',padding:'1px 6px',borderRadius:4}}>🟡 ${d}d</span>
     :null;
+
+  const totalPagado = conFecha.filter(t => t.isCompleted).reduce((s, t) => s + t.monto, 0);
+  const percent = totalFijo ? Math.round((totalPagado / totalFijo) * 100) : 0;
 
   if (!GASTOS_FIJOS_DATA.length) {
     return (
@@ -1366,7 +1511,59 @@ function GastosFijosCard() {
   }
 
   return (
-    <div className="card mb">
+    <div className="card mb" style={{position:'relative'}}>
+      {/* Modal de Pago */}
+      {showPaymentModal && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99,
+          borderRadius: 24
+        }}>
+          <div className="card" style={{ width: '90%', maxWidth: 360, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 18, color: 'var(--text)' }}>Confirmar Pago</h3>
+            <p style={{ margin: '0 0 20px 0', color: 'var(--t2)', fontSize: 13, lineHeight: 1.5 }}>
+              Estás marcando <b>{showPaymentModal.descripcion}</b> como pagado.
+            </p>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--t2)', marginBottom: 6 }}>Fecha de Pago</label>
+              <input 
+                type="date" 
+                className="inp" 
+                value={paymentDate} 
+                onChange={(e) => setPaymentDate(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--t2)', marginBottom: 6 }}>¿Quién o de dónde pagó?</label>
+              <input 
+                type="text" 
+                className="inp" 
+                placeholder="Ej. Cuenta Empresa, Socio 1..."
+                value={payerName} 
+                onChange={(e) => setPayerName(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button 
+                className="btn" 
+                onClick={() => setShowPaymentModal(null)}
+                style={{ background: 'var(--bg)', color: 'var(--t2)' }}
+              >Cancelar</button>
+              <button 
+                className="btn btn-primary" 
+                onClick={confirmPayment}
+              >Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16,flexWrap:'wrap',marginBottom:16,paddingBottom:14,borderBottom:'1px solid var(--border)'}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -1376,13 +1573,22 @@ function GastosFijosCard() {
             <div style={{fontFamily:'DM Sans',fontWeight:800,fontSize:22,color:'oklch(45% .17 75)',lineHeight:1}}>{fmt(totalFijo)}</div>
           </div>
         </div>
-        <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
+        <div style={{display:'flex',gap:20,flexWrap:'wrap',alignItems:'center'}}>
+          <div style={{textAlign:'right', paddingRight:16, borderRight:'1px solid var(--border)'}}>
+            <div style={{fontSize:11.5,color:'var(--t3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:4}}>Progreso</div>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <div style={{width:60, height:6, background:'var(--border)', borderRadius:3, overflow:'hidden'}}>
+                <div style={{width:`${percent}%`, height:'100%', background:'oklch(45% .17 75)', transition:'width 0.4s ease'}} />
+              </div>
+              <div style={{fontFamily:'DM Sans',fontWeight:700,fontSize:14,color:'var(--text)'}}>{percent}%</div>
+            </div>
+          </div>
           <div style={{textAlign:'right'}}>
             <div style={{fontSize:11.5,color:'var(--t3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>Ítems</div>
             <div style={{fontFamily:'DM Sans',fontWeight:700,fontSize:16,color:'var(--text)'}}>{GASTOS_FIJOS_DATA.length}</div>
             <div style={{fontSize:11.5,color:'var(--t3)'}}>{cats.length} categoría{cats.length!==1?'s':''}</div>
           </div>
-          {cats.slice(0,3).map((c,i)=>(
+          {cats.slice(0,2).map((c,i)=>(
             <div key={i} style={{textAlign:'right',paddingLeft:16,borderLeft:'1px solid var(--border)'}}>
               <div style={{fontSize:11.5,color:'var(--t3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{c.cat}</div>
               <div style={{fontFamily:'DM Sans',fontWeight:700,fontSize:14,color:'var(--text)'}}>{fmt(c.monto)}</div>
@@ -1405,17 +1611,77 @@ function GastosFijosCard() {
         </thead>
         <tbody>
           {conFecha.map((g,i)=>(
-            <tr key={i} style={{background:urgBg(g.dias)}}>
-              <td style={{fontWeight:500}}>{g.descripcion}</td>
-              <td><span style={{fontSize:11.5,padding:'2px 8px',borderRadius:5,background:'var(--amber-bg)',color:'oklch(48% .15 75)',fontWeight:600}}>{g.categoria||'Otros'}</span></td>
+            <tr key={i} style={{background:g.isCompleted?'transparent':urgBg(g.dias), opacity:g.isCompleted?0.6:1, transition:'opacity 0.3s'}}>
+              <td style={{fontWeight:500}}>
+                <div style={{display:'flex', alignItems:'center', gap:12}}>
+                  <button 
+                    onClick={() => {
+                      if (g.isCompleted) {
+                        toggleTask(g, true);
+                      } else {
+                        setShowPaymentModal(g);
+                        setPaymentDate(getTodayStr());
+                        setPayerName(fbUser ? fbUser.email : '');
+                      }
+                    }}
+                    style={{
+                      width:20, height:20, borderRadius:4, border: g.isCompleted ? 'none' : '2px solid var(--border)',
+                      background: g.isCompleted ? 'var(--blue)' : 'transparent',
+                      display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
+                      transition:'all 0.2s', flexShrink:0
+                    }}
+                  >
+                    {g.isCompleted && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </button>
+                  <div style={{display:'flex', flexDirection:'column'}}>
+                    <span style={{textDecoration: g.isCompleted ? 'line-through' : 'none', color:g.isCompleted?'var(--t3)':'inherit'}}>{g.descripcion}</span>
+                    {g.isCompleted && g.details && g.details.quienPago && (
+                      <span style={{fontSize: 11, color:'var(--t3)', marginTop: 2, fontWeight: 400}}>
+                        Pagado el {g.details.fechaPago} por {g.details.quienPago}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td><span style={{fontSize:11.5,padding:'2px 8px',borderRadius:5,background:'var(--amber-bg)',color:'oklch(48% .15 75)',fontWeight:600, opacity:g.isCompleted?0.6:1}}>{g.categoria||'Otros'}</span></td>
               <td className="r" style={{color:'var(--t3)',fontSize:13}}>día {g.dia_pago||30}</td>
-              <td className="mono r" style={{fontWeight:700,color:'oklch(45% .17 75)'}}>{fmt(g.monto)}</td>
+              <td className="mono r" style={{fontWeight:700,color:g.isCompleted?'var(--t3)':'oklch(45% .17 75)'}}>{fmt(g.monto)}</td>
               <td>
-                <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{fontSize:12,color:urgCol(g.dias),fontWeight:500}}>
-                    {g.proxFecha.getDate()} {meses3GF[g.proxFecha.getMonth()]}
-                  </span>
-                  {urgTag(g.dias)}
+                <div style={{display:'flex',alignItems:'center',gap:6, justifyContent:'space-between'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:12,color:g.isCompleted?'var(--t3)':urgCol(g.dias),fontWeight:500}}>
+                      {g.proxFecha.getDate()} {meses3GF[g.proxFecha.getMonth()]}
+                    </span>
+                    {!g.isCompleted && urgTag(g.dias)}
+                  </div>
+                  <button
+                    onClick={() => handleSyncToCalendar(g)}
+                    title="Añadir a Google Calendar"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--t2)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 4,
+                      opacity: g.isCompleted ? 0 : 0.6,
+                      pointerEvents: g.isCompleted ? 'none' : 'auto',
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = 0.6}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                      <line x1="12" y1="14" x2="12" y2="18"/>
+                      <line x1="10" y1="16" x2="14" y2="16"/>
+                    </svg>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -1432,7 +1698,6 @@ function GastosFijosCard() {
     </div>
   );
 }
-
 function NominaSectionCard({ nominaVer }) {
   const totalNomina   = NOMINA_DATA.reduce((s,e)=>s+e.monto,0);
   const totalPersonas = NOMINA_DATA.reduce((s,e)=>s+(e.personas||1),0);
@@ -1541,7 +1806,75 @@ function NominaSectionCard({ nominaVer }) {
   );
 }
 
-function GastosPage({ nominaVer }) {
+// ── Anticipos — segunda tabla de la hoja SUELDOS (categoría separada) ──
+function AnticiposSectionCard() {
+  const totalAnt      = ANTICIPOS_DATA.reduce((s,e)=>s+e.monto,0);
+  const totalPersonas = ANTICIPOS_DATA.reduce((s,e)=>s+(e.personas||1),0);
+  if (!ANTICIPOS_DATA.length) return null;
+  return (
+    <div className="card mb">
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16,flexWrap:'wrap',marginBottom:16,paddingBottom:14,borderBottom:'1px solid var(--border)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{width:40,height:40,background:'var(--bg)',borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,minWidth:40}}>🪙</div>
+          <div>
+            <div style={{fontSize:12,color:'var(--t3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.5,marginBottom:2}}>Anticipos</div>
+            <div style={{fontFamily:'DM Sans',fontWeight:800,fontSize:22,color:'var(--amber)',lineHeight:1}}>{fmt(totalAnt)}</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:11.5,color:'var(--t3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>Personas</div>
+            <div style={{fontFamily:'DM Sans',fontWeight:700,fontSize:16,color:'var(--text)'}}>{totalPersonas}</div>
+            <div style={{fontSize:11.5,color:'var(--t3)'}}>{ANTICIPOS_DATA.length} empresa{ANTICIPOS_DATA.length!==1?'s':''}</div>
+          </div>
+        </div>
+      </div>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th style={{width:24}}>#</th>
+            <th>Empresa</th>
+            <th className="r">Personas</th>
+            <th className="r">Monto</th>
+            <th className="r" style={{minWidth:110}}>Participación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ANTICIPOS_DATA.map((e,i)=>{
+            const pct = totalAnt>0?((e.monto/totalAnt)*100):0;
+            return (
+              <tr key={i}>
+                <td style={{color:'var(--t3)',fontSize:12}}>{i+1}</td>
+                <td style={{fontWeight:600}}>{e.empresa||'—'}</td>
+                <td className="r" style={{color:'var(--t2)',fontSize:13,fontWeight:500}}>{e.personas||1}</td>
+                <td className="mono r" style={{fontWeight:700,color:'var(--amber)'}}>{fmt(e.monto)}</td>
+                <td className="r">
+                  <div style={{display:'flex',alignItems:'center',gap:7,justifyContent:'flex-end'}}>
+                    <div style={{width:64,height:5,borderRadius:3,background:'var(--border)',overflow:'hidden',flexShrink:0}}>
+                      <div style={{width:`${pct}%`,height:'100%',background:'var(--amber)',borderRadius:3}}/>
+                    </div>
+                    <span style={{color:'var(--t3)',fontSize:12,minWidth:34,textAlign:'right'}}>{pct.toFixed(1)}%</span>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{borderTop:'2px solid var(--border)'}}>
+            <td colSpan={2} style={{fontWeight:700,paddingTop:10,color:'var(--text)'}}>Total Anticipos</td>
+            <td className="r" style={{fontWeight:700,paddingTop:10}}>{totalPersonas}</td>
+            <td className="mono r" style={{fontWeight:800,fontSize:15,color:'var(--amber)',paddingTop:10}}>{fmt(totalAnt)}</td>
+            <td className="r" style={{paddingTop:10,color:'var(--t3)',fontSize:12}}>100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+// ── Tareas Inteligentes Page Component ──
+function GastosPage({ nominaVer, fbUser }) {
   const pendientes = GASTOS.filter(g=>g.estado==='Pendiente').sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const pagados = GASTOS.filter(g=>g.estado==='Pagado').sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalPend = pendientes.reduce((s,g)=>s+g.monto,0);
@@ -1564,6 +1897,7 @@ function GastosPage({ nominaVer }) {
           {label:'Pendiente',         val:fmt(totalPend),          sub:`${pendientes.length} pagos`, dir:'a'},
           {label:'Próx. Vencimiento', val:fmt(pendientes[0]?.monto||0), sub:fmtDate(pendientes[0]?.fecha||''), dir:'r'},
           ...(totalNomina>0?[{label:'Nómina del Mes', val:fmt(totalNomina), sub:`${NOMINA_DATA.reduce((s,e)=>s+(e.personas||1),0)} personas`, dir:'b'}]:[]),
+          ...(ANTICIPOS_DATA.length>0?[{label:'Anticipos del Mes', val:fmt(ANTICIPOS_DATA.reduce((s,e)=>s+e.monto,0)), sub:`${ANTICIPOS_DATA.reduce((s,e)=>s+(e.personas||1),0)} personas`, dir:'a'}]:[]),
           ...(GASTOS_FIJOS_DATA.length>0?[{label:'Gastos Fijos', val:fmt(GASTOS_FIJOS_DATA.reduce((s,g)=>s+g.monto,0)), sub:`${GASTOS_FIJOS_DATA.length} ítems recurrentes`, dir:'a'}]:[]),
         ].map((k,i)=>(
           <div className="kcard" key={i}><div className="kcard-label">{k.label}</div><div className="kcard-val">{k.val}</div><div className={`kcard-change ${k.dir}`}><span className="sub">{k.sub}</span></div></div>
@@ -1573,8 +1907,11 @@ function GastosPage({ nominaVer }) {
       {/* ── NÓMINA — sección siempre visible ─────────────────────────── */}
       <NominaSectionCard nominaVer={nominaVer}/>
 
+      {/* ── ANTICIPOS — segunda tabla de la hoja SUELDOS ─────────────── */}
+      <AnticiposSectionCard/>
+
       {/* ── GASTOS FIJOS — sección siempre visible ───────────────────── */}
-      <GastosFijosCard/>
+      <GastosFijosCard fbUser={fbUser}/>
 
       {/* ── Gráficos ─────────────────────────────────────────────────── */}
       <div className="g11 mb">
@@ -1616,51 +1953,57 @@ function GastosPage({ nominaVer }) {
         <div className="card-hd">
           <div className="card-title">Detalle de Pagos</div>
           <div className="tabs" style={{marginBottom:0}}>
-            {[['pendiente',`Pendiente (${pendientes.length})`],['pagado',`Cancelado (${pagados.length})`]].map(([id,lbl])=>(
+            {[
+              ['pendiente', `Pendiente (${pendientes.length})`],
+              ['pagado', `Cancelado (${pagados.length})`]
+            ].map(([id,lbl])=>(
               <button key={id} className={`tab ${tab===id?'act':''}`} onClick={()=>setTab(id)}>{lbl}</button>
             ))}
           </div>
         </div>
+
+        {/* Detalle */}
         <table className="tbl">
-          <thead><tr><th>Fecha Pago</th><th>Proveedor</th><th className="r">Monto</th><th>Estado</th><th>Alerta</th></tr></thead>
-          <tbody>
-            {(tab==='pendiente'?pendientes:pagados).slice(0, 100).map((g,i)=>{
-              const dias = Math.round((new Date(g.fecha) - new Date()) / 86400000);
-              const esVencido  = dias < 0;
-              const esHoy      = dias === 0;
-              const es2dias    = dias >= 1 && dias <= 2;
-              const es7dias    = dias >= 3 && dias <= 7;
-              const rowBg = tab==='pendiente'
-                ? esVencido||esHoy ? 'rgba(220,38,38,.07)'
-                : es2dias          ? 'rgba(251,146,60,.07)'
-                : es7dias          ? 'rgba(234,179,8,.06)'
-                : 'transparent'
-                : 'transparent';
-              const alerta = tab!=='pendiente' ? null
-                : esVencido  ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'2px 7px',borderRadius:5}}>🔴 Vencido</span>
-                : esHoy      ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'2px 7px',borderRadius:5}}>🔴 Vence hoy</span>
-                : es2dias    ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'oklch(45% .17 75)',background:'var(--amber-bg)',padding:'2px 7px',borderRadius:5}}>🟠 {dias}d</span>
-                : es7dias    ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:600,color:'oklch(52% .15 75)',background:'oklch(98% .04 90)',padding:'2px 7px',borderRadius:5}}>🟡 {dias}d</span>
-                : null;
-              return (
-                <tr key={i} style={{background:rowBg}}>
-                  <td className="mono" style={{color: tab==='pendiente'&&(esVencido||esHoy)?'var(--red)':es2dias?'oklch(45% .17 75)':'var(--t3)',fontSize:13,fontWeight:esVencido||esHoy?700:400}}>{fmtDate(g.fecha)}</td>
-                  <td style={{fontWeight:500}}>{g.descripcion}</td>
-                  <td className="mono r" style={{fontWeight:600}}>{fmt(g.monto)}</td>
-                  <td><span className={`pill ${g.estado==='Pagado'?'g':'a'}`}>{g.estado}</span></td>
-                  <td>{alerta}</td>
+            <thead><tr><th>Fecha Pago</th><th>Proveedor</th><th className="r">Monto</th><th>Estado</th><th>Alerta</th></tr></thead>
+            <tbody>
+              {(tab==='pendiente'?pendientes:pagados).slice(0, 100).map((g,i)=>{
+                const dias = Math.round((new Date(g.fecha) - new Date()) / 86400000);
+                const esVencido  = dias < 0;
+                const esHoy      = dias === 0;
+                const es2dias    = dias >= 1 && dias <= 2;
+                const es7dias    = dias >= 3 && dias <= 7;
+                const rowBg = tab==='pendiente'
+                  ? esVencido||esHoy ? 'rgba(220,38,38,.07)'
+                  : es2dias          ? 'rgba(251,146,60,.07)'
+                  : es7dias          ? 'rgba(234,179,8,.06)'
+                  : 'transparent'
+                  : 'transparent';
+                const alerta = tab!=='pendiente' ? null
+                  : esVencido  ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'2px 7px',borderRadius:5}}>🔴 Vencido</span>
+                  : esHoy      ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'var(--red)',background:'var(--red-bg)',padding:'2px 7px',borderRadius:5}}>🔴 Vence hoy</span>
+                  : es2dias    ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:700,color:'oklch(45% .17 75)',background:'var(--amber-bg)',padding:'2px 7px',borderRadius:5}}>🟠 {dias}d</span>
+                  : es7dias    ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,fontWeight:600,color:'oklch(52% .15 75)',background:'oklch(98% .04 90)',padding:'2px 7px',borderRadius:5}}>🟡 {dias}d</span>
+                  : null;
+                return (
+                  <tr key={i} style={{background:rowBg}}>
+                    <td className="mono" style={{color: tab==='pendiente'&&(esVencido||esHoy)?'var(--red)':es2dias?'oklch(45% .17 75)':'var(--t3)',fontSize:13,fontWeight:esVencido||esHoy?700:400}}>{fmtDate(g.fecha)}</td>
+                    <td style={{fontWeight:500}}>{g.descripcion}</td>
+                    <td className="mono r" style={{fontWeight:600}}>{fmt(g.monto)}</td>
+                    <td><span className={`pill ${g.estado==='Pagado'?'g':'a'}`}>{g.estado}</span></td>
+                    <td>{alerta}</td>
+                  </tr>
+                );
+              })}
+              {(tab==='pendiente'?pendientes:pagados).length > 100 && (
+                <tr>
+                  <td colSpan={5} style={{textAlign:'center', color:'var(--t3)', padding:'12px', fontSize:13, background:'var(--bg)'}}>
+                    Mostrando los primeros 100 gastos de {(tab==='pendiente'?pendientes:pagados).length}.
+                  </td>
                 </tr>
-              );
-            })}
-            {(tab==='pendiente'?pendientes:pagados).length > 100 && (
-              <tr>
-                <td colSpan={5} style={{textAlign:'center', color:'var(--t3)', padding:'12px', fontSize:13, background:'var(--bg)'}}>
-                  Mostrando los primeros 100 gastos de {(tab==='pendiente'?pendientes:pagados).length}.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        
       </div>
     </div>
   );
@@ -3971,10 +4314,17 @@ function App() {
   const handleGoogleLogin = async () => {
     if (!isFirebaseConfigured || typeof firebase === 'undefined') return;
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar.events');
     setFbLoading(true);
     setAccessDeniedReason(null);
     try {
-      await firebase.auth().signInWithPopup(provider);
+      const result = await firebase.auth().signInWithPopup(provider);
+      if (result && result.credential) {
+        const token = result.credential.accessToken;
+        sessionStorage.setItem('google_access_token', token);
+        window.googleAccessToken = token;
+        console.log("🎟️ Google access token stored from popup");
+      }
     } catch (err) {
       console.warn("Popup blocked, trying redirect...", err);
       try {
@@ -3996,6 +4346,8 @@ function App() {
           firebaseUnsubscribe = null;
         }
         await firebase.auth().signOut();
+        sessionStorage.removeItem('google_access_token');
+        delete window.googleAccessToken;
         setFbUser(null);
         setFbUserRole('Visualizador');
         setAllowedModules(['home']);
@@ -4049,7 +4401,7 @@ function App() {
                   email: email,
                   nombre: user.displayName || 'Brandon V.',
                   rol: 'Administrador',
-                  modulos: ['home', 'mov', 'sim', 'gas', 'ven', 'fon', 'cre', 'fin', 'ia', 'cloud', 'usuarios'],
+                  modulos: ['home', 'mov', 'sim', 'tareas', 'gas', 'ven', 'fon', 'cre', 'fin', 'ia', 'cloud', 'usuarios'],
                   activo: true,
                   creadoEn: firebase.firestore.FieldValue.serverTimestamp()
                 };
@@ -4402,13 +4754,40 @@ function App() {
               var emp=sColEmp>=0?String(r[sColEmp]||'').trim():'Personal';
               var nom=sColNom>=0?String(r[sColNom]||'').trim():'';
               var mto=sColMto>=0?cn(r[sColMto]):0;
-              // Solo saltar si monto es 0, o si es una fila de totales — NO saltar por nom vacío
-              if(mto<=0||/^total/i.test(emp)||/^total/i.test(nom))return;
+              // Saltar si monto es 0, fila de totales, o fila separadora/total sin empresa ni nombre
+              if(mto<=0||(!emp&&!nom)||/^total/i.test(emp)||/^total/i.test(nom))return;
               if(!sEmpMap[emp])sEmpMap[emp]={empresa:emp,personas:0,monto:0};
               sEmpMap[emp].personas++;sEmpMap[emp].monto+=mto;
             });
             var nomFromSheets=Object.values(sEmpMap).filter(function(e){return e.monto>0;}).sort(function(a,b){return b.monto-a.monto;});
             if(nomFromSheets.length){NOMINA_DATA=nomFromSheets;console.log('✅ NÓMINA cargada desde Google Sheets:',nomFromSheets.length,'empresas | Total:',nomFromSheets.reduce(function(s,e){return s+e.monto;},0));}
+            // ── 2da tabla: ANTICIPOS (columnas a la derecha de una columna separadora vacía) ──
+            var gapIdx=-1;
+            for(var gi=(sColMto>=0?sColMto:0)+1; gi<sHdr.length; gi++){ if(String(sHdr[gi]||'').trim()===''){gapIdx=gi;break;} }
+            var aColEmp=-1,aColNom=-1,aColMto=-1;
+            if(gapIdx>=0){
+              for(var ai=gapIdx+1; ai<sHdr.length; ai++){
+                var ah=String(sHdr[ai]||'').toLowerCase();
+                if(aColEmp<0&&(ah.includes('empr')||ah.includes('razon')||ah.includes('razón')))aColEmp=ai;
+                if(aColNom<0&&(ah.includes('nombre')||ah.includes('beneficiario')))aColNom=ai;
+                if(aColMto<0&&(ah.includes('monto')||ah.includes('anticipo')))aColMto=ai;
+              }
+            }
+            if(aColMto>=0){
+              var aEmpMap={};
+              sDRows.forEach(function(r){
+                var emp=aColEmp>=0?String(r[aColEmp]||'').trim():'Personal';
+                var nom=aColNom>=0?String(r[aColNom]||'').trim():'';
+                var mto=cn(r[aColMto]);
+                // Exigir nombre del beneficiario evita contar la fila de TOTALES (monto sin nombre)
+                if(!nom||mto<=0||/^total/i.test(emp)||/^total/i.test(nom))return;
+                if(!emp)emp='Personal';
+                if(!aEmpMap[emp])aEmpMap[emp]={empresa:emp,personas:0,monto:0};
+                aEmpMap[emp].personas++;aEmpMap[emp].monto+=mto;
+              });
+              var antFromSheets=Object.values(aEmpMap).filter(function(e){return e.monto>0;}).sort(function(a,b){return b.monto-a.monto;});
+              if(antFromSheets.length){ANTICIPOS_DATA=antFromSheets;console.log('✅ ANTICIPOS cargados desde Google Sheets:',antFromSheets.length,'empresas | Total:',antFromSheets.reduce(function(s,e){return s+e.monto;},0));}
+            }
           }
         }catch(e){console.warn('SUELDOS no disponibles:',e.message);}}
         // ── GASTOS FIJOS desde Google Sheets ─────────────────────────────────
@@ -4463,12 +4842,12 @@ function App() {
   const navItems=[
     {id:'home', label:'Resumen',     icon:'fon'},
     {id:'mov',  label:'Movimientos', icon:'mov'},
-    {id:'sim',  label:'Simulador',   icon:'sim'},
     {id:'gas',  label:'Proyección',  icon:'gas'},
     {id:'ven',  label:'Ventas',      icon:'ven'},
     {id:'fon',  label:'Fondos',      icon:'fon'},
     {id:'cre',  label:'Créditos',    icon:'cre'},
     {id:'fin',  label:'Finiquitos',  icon:'fin'},
+    {id:'sim',  label:'Simulador',   icon:'sim'},
     {id:'ia',   label:'Analista IA', icon:'ia'},
     {id:'cloud',label:'Nube Cloud',  icon:'cld'},
     {id:'usuarios', label:'Accesos y Roles', icon:'usr', showOnlyForAdmin:true},
@@ -4523,6 +4902,7 @@ function App() {
   );
 
   const allowed = allowedModules || ['home'];
+  
   const visibleNavItems = navItems.filter(item => {
     if (item.showOnlyForAdmin) {
       return allowed.includes(item.id) && fbUserRole === 'Administrador';
@@ -4557,6 +4937,8 @@ function App() {
               <div className="ni-icon">
                 {n.id==='home'
                   ? <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  : n.id==='tareas'
+                  ? <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                   : <IC n={n.icon} s={17}/>
                 }
               </div>
@@ -4658,7 +5040,7 @@ function App() {
         )}
         {active==='sim'  && <RunwaySimulatorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} />}
         {active==='ia'   && <AIAdvisorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} apiKey={apiKey} saveApiKey={saveApiKey} />}
-        {active==='gas'  && <GastosPage nominaVer={nominaVer}/>}
+        {active==='gas'  && <GastosPage nominaVer={nominaVer} fbUser={fbUser}/>}
         {active==='ven'  && <VentasPage onUpload={()=>setShowUploadVentas(true)} dataLoaded={dataLoaded}/>}
         {active==='fon'  && <FondosPage/>}
         {active==='cre'  && <CreditosPage saldos={unificatedSaldos}/>}
@@ -5995,6 +6377,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
 
     // Sueldos y costos fijos mensuales (usados en modo mensual)
     const sueldosMensual = incluirSueldos ? NOMINA_DATA.reduce((s, e) => s + e.monto, 0) : 0;
+    const anticiposMensual = incluirSueldos ? ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0) : 0;
     const fijosMensual = incluirFijos ? GASTOS_FIJOS_DATA.reduce((s, f) => s + f.monto, 0) : 0;
 
     if (isDaily) {
@@ -6036,11 +6419,12 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
         // 5. Sueldos este día (si el día de la fecha es el 30 del mes)
         const isSueldosDay = projDate.getDate() === 30;
         const sueldosDia = (incluirSueldos && isSueldosDay) ? NOMINA_DATA.reduce((s, e) => s + e.monto, 0) : 0;
+        const anticiposDia = (incluirSueldos && isSueldosDay) ? ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0) : 0;
 
         // 6. Gastos Fijos este día
         const fijosDia = incluirFijos ? GASTOS_FIJOS_DATA.filter(g => g.dia_pago === projDate.getDate()).reduce((s, f) => s + f.monto, 0) : 0;
 
-        const totalEgresosMes = sueldosDia + fijosDia + creditosDia + finiquitosDia + gastosDia;
+        const totalEgresosMes = sueldosDia + anticiposDia + fijosDia + creditosDia + finiquitosDia + gastosDia;
         const saldoInicial = currentBalance;
         const flujoNeto = cobranzaProyectada - totalEgresosMes;
         currentBalance += flujoNeto;
@@ -6053,7 +6437,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           cobros: cobranzaProyectada,
           fijos: fijosDia + finiquitosDia,
           cheques: gastosDia,
-          nomina: sueldosDia,
+          nomina: sueldosDia + anticiposDia,
           creditos: creditosDia,
           flujo: flujoNeto,
           final: currentBalance
@@ -6102,7 +6486,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
         }).reduce((s, f) => s + f.montoPago, 0) : 0;
 
-        const totalEgresosMes = sueldosMensual + fijosMensual + creditosMes + finiquitosMes + gastosMes;
+        const totalEgresosMes = sueldosMensual + anticiposMensual + fijosMensual + creditosMes + finiquitosMes + gastosMes;
         const saldoInicial = currentBalance;
         const flujoNeto = cobranzaProyectada - totalEgresosMes;
         currentBalance += flujoNeto;
@@ -6115,7 +6499,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           cobros: cobranzaProyectada,
           fijos: fijosMensual + finiquitosMes,
           cheques: gastosMes,
-          nomina: sueldosMensual,
+          nomina: sueldosMensual + anticiposMensual,
           creditos: creditosMes,
           flujo: flujoNeto,
           final: currentBalance
@@ -6264,7 +6648,7 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
             <div style={{display:'flex',flexDirection:'column',gap:9,marginTop:8}}>
               <label className="sim-checkbox-label">
                 <input type="checkbox" checked={incluirSueldos} onChange={e=>setIncluirSueldos(e.target.checked)}/>
-                Remuneraciones (Sueldos)
+                Remuneraciones (Sueldos + Anticipos)
               </label>
               <label className="sim-checkbox-label">
                 <input type="checkbox" checked={incluirCreditos} onChange={e=>setIncluirCreditos(e.target.checked)}/>
@@ -6365,6 +6749,7 @@ function AIAdvisorPage({ saldos, movRecientes, apiKey, saveApiKey }) {
   const totalInversiones = FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
   
   const sueldosTotal = NOMINA_DATA.reduce((s, e) => s + e.monto, 0);
+  const anticiposTotal = ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0);
   const fijosTotal = GASTOS_FIJOS_DATA.reduce((s, f) => s + f.monto, 0);
   const cobranzaVencida = COB_PENDIENTES.reduce((s, c) => c.estado === 'VENCIDO' ? s + c.saldo : s, 0);
 
@@ -6386,7 +6771,7 @@ function AIAdvisorPage({ saldos, movRecientes, apiKey, saveApiKey }) {
   const maxDebtorPercent = cobranzaVencida > 0 ? (maxDebtorVal / cobranzaVencida) * 100 : 0;
 
   const creditosMes = CREDITOS_SHEETS_RAW.filter(c => c.estado !== 'Pagado').reduce((s, c) => s + c.montoPago, 0);
-  const runwayDias = (sueldosTotal + fijosTotal) > 0 ? Math.round(totalCaja / ((sueldosTotal + fijosTotal) / 30)) : 365;
+  const runwayDias = (sueldosTotal + anticiposTotal + fijosTotal) > 0 ? Math.round(totalCaja / ((sueldosTotal + anticiposTotal + fijosTotal) / 30)) : 365;
 
   const getReferenceDate = () => {
     let d = new Date();
@@ -6463,8 +6848,9 @@ Total en Fondos Mutuos (FFMM): ${fmt(totalInversiones)}
 - Sueldos/Planilla de Remuneraciones: ${fmt(sueldosTotal)} (para ${activeNomina.reduce((s, e) => s + (e.personas || 1), 0)} personas)
   Desglose de nómina por empresa:
   ${activeNomina.map(e => `  * ${e.empresa}: ${fmt(e.monto)} (${e.personas || 1} personas)`).join("\n")}
+- Anticipos: ${fmt(anticiposTotal)}
 - Gastos Fijos de Planta (Arriendos, Seguros, etc.): ${fmt(fijosTotal)}
-- Total Egresos Recurrentes Mínimos: ${fmt(sueldosTotal + fijosTotal)}
+- Total Egresos Recurrentes Mínimos: ${fmt(sueldosTotal + anticiposTotal + fijosTotal)}
 - Runway en cuentas corrientes: ${runwayDias} días de cobertura.
 
 4. CARTERA DE CUENTAS POR COBRAR (COBRANZA ACTIVA):
@@ -6521,7 +6907,7 @@ Recuerda:
       text = `<strong>Diagnóstico de Salud Financiera:</strong><br><br>
       La situación financiera del grupo se cataloga como <strong>Sólida con Atención en Cartera</strong>.<br><br>
       • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
-      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>${fmt(sueldosTotal)}</strong> y gastos fijos de <strong>${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>${fmt(sueldosTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
+      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>${fmt(sueldosTotal)}</strong>, anticipos por <strong>${fmt(anticiposTotal)}</strong> y gastos fijos de <strong>${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>${fmt(sueldosTotal + anticiposTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
       • <strong>Relación GMD & Grafhika:</strong> El sistema ha detectado y aislado los movimientos inter-compañías entre las empresas hermanas (incluyendo traspasos directos y TEFs recurrentes). Estos flujos internos han sido completamente excluidos de las métricas de ingresos y egresos de caja para entregar un análisis de rentabilidad orgánico y libre de doble contabilidad.<br>
       • <strong>Riesgo:</strong> El simulador muestra que, en caso de que la cobranza caiga al 50% de efectividad, la caja operativa podría contraerse considerablemente en los próximos 6 meses si no se cuenta con retiros de tus fondos de inversión.`;
     } else if (query === 'riesgo-clientes') {
@@ -6532,10 +6918,11 @@ Recuerda:
       • <strong>Alternativa de Liquidez:</strong> Ceder estos folios vencidos de clientes corporativos triple-A a factoring inyectará caja de inmediato reduciendo el costo de cobranza judicial.`;
     } else if (query === 'runway-analisis') {
       text = `<strong>Análisis Detallado de Runway y Nómina:</strong><br><br>
-      Tus egresos recurrentes de planta mensuales son de <strong>${fmt(sueldosTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
+      Tus egresos recurrentes de planta mensuales son de <strong>${fmt(sueldosTotal + anticiposTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
       • <strong>Remuneraciones Consolidadas:</strong> <strong>${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
+      • <strong>Anticipos:</strong> <strong>${fmt(anticiposTotal)}</strong> mensual.<br>
       • <strong>Gastos Fijos Operativos:</strong> <strong>${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
-      Tu runway de caja es de aproximadamente <strong>${(totalCaja / (sueldosTotal + fijosTotal)).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
+      Tu runway de caja es de aproximadamente <strong>${((sueldosTotal + anticiposTotal + fijosTotal) > 0 ? totalCaja / (sueldosTotal + anticiposTotal + fijosTotal) : 0).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
     } else if (query === 'estrategia-90') {
       text = `<strong>Recomendaciones Estratégicas para los Próximos 90 Días:</strong><br><br>
       1. <strong>Campaña Preferencial sobre ${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
@@ -6864,14 +7251,16 @@ ${bank}</strong>: ${fmt(val)}`)
       query.includes("costos")
     ) {
       const totalSueldos = NOMINA_DATA.reduce((s, e) => s + e.monto, 0);
+      const totalAnticipos = ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0);
       const variableGastos = GASTOS.filter(g => !g.estado || g.estado.toLowerCase() !== 'pagado').reduce((s, g) => s + g.monto, 0);
 
       text = `<strong>Análisis Consolidado de Egresos y Gastos Operativos:</strong><br><br>
-      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>${fmt(totalSueldos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
+      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>${fmt(totalSueldos + totalAnticipos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
       • <strong>Remuneraciones (Sueldos)</strong>: <strong>${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
+      ${totalAnticipos>0?`• <strong>Anticipos</strong>: <strong>${fmt(totalAnticipos)}</strong>.<br>`:''}
       • <strong>Gastos Fijos Operativos</strong>: <strong>${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
       • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>${fmt(variableGastos)}</strong>.<br><br>
-      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>${fmt(totalSueldos + fijosTotal)}</strong>.</em>`;
+      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>${fmt(totalSueldos + totalAnticipos + fijosTotal)}</strong>.</em>`;
     }
     // 8. FALLBACK / GENERAL RECOMMENDATIONS
     else {
