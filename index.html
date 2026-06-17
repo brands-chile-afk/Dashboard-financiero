@@ -3391,11 +3391,16 @@ function UploadVentasPanel({ onImport, onClose }) {
 
         // Buscar la fila que contiene los encabezados reales
         // (la que tiene al menos 3 celdas con texto que parecen headers)
-        const headerKeywords = /folio|factura|empresa|cliente|nombre|rut|total|monto|saldo|estado|fecha|venc|ejecut|vendedor|neto|importe/i;
-        let headerRowIdx = rawRows.findIndex(row =>
-          row.filter(c => headerKeywords.test(String(c))).length >= 2
-        );
-        if (headerRowIdx < 0) headerRowIdx = 0;
+        const headerKeywords = /folio|factura|empresa|cliente|nombre|rut|codigo legal|código legal|total|monto|saldo|estado|fecha|emision|emisión|venc|ejecut|vendedor|neto|importe|observ|origen/i;
+        // Elegir la fila de encabezados REAL: la que tiene MÁS coincidencias de keywords.
+        // (evita confundir filas de resumen/KPIs como "TOTAL FACTURAS" con los encabezados reales)
+        let headerRowIdx = 0, bestScore = 0;
+        const scanLimit = Math.min(rawRows.length, 25);
+        for (let i = 0; i < scanLimit; i++) {
+          const score = rawRows[i].filter(c => headerKeywords.test(String(c))).length;
+          if (score > bestScore) { bestScore = score; headerRowIdx = i; }
+        }
+        if (bestScore < 2) headerRowIdx = 0;
 
         const headerRow = rawRows[headerRowIdx];
         const dataRows  = rawRows.slice(headerRowIdx + 1).filter(r => r.some(c => c !== '' && c !== null));
@@ -3412,7 +3417,7 @@ function UploadVentasPanel({ onImport, onClose }) {
         const keys = Object.keys(rows[0]);
         const find = (...terms) => keys.find(k => terms.some(t => k.toLowerCase().includes(t.toLowerCase()))) || '';
         const cFolio   = find('folio','n°','nro','num','n∞','n º','#','doc');
-        const cRut     = find('rut');
+        const cRut     = find('rut','código legal','codigo legal');
         const cEmpresa = find('empresa','cliente','razón','razon','nombre','razon social');
         const cFecha   = find('emision','emisión','fecha e','fecha d','f. e','f.e','fecha factura','f. factura');
         const cTotal   = find('total','monto total','valor total','importe','monto neto','valor neto','neto');
@@ -4793,6 +4798,25 @@ function App() {
         // ── GASTOS FIJOS desde Google Sheets ─────────────────────────────────
         if(GID_GASTOS_FIJOS){try{var gfTxt=await fetch(BASE+'?gid='+GID_GASTOS_FIJOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var gfRows=parseCSV(gfTxt).slice(1).filter(function(r){return r[0];});GASTOS_FIJOS_DATA=gfRows.map(function(r){return{descripcion:r[0]||'',monto:cn(r[1]),dia_pago:parseInt(r[2])||30,categoria:r[3]||'Fijo'};}).filter(function(r){return r.descripcion&&r.monto>0;});console.log('✅ GASTOS FIJOS cargados:',GASTOS_FIJOS_DATA.length,'ítems');}catch(e){console.warn('GASTOS_FIJOS no disponibles:',e.message);}}
         if(GID_FINIQUITOS){try{var finTxt=await fetch(BASE+'?gid='+GID_FINIQUITOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var finRows=parseCSV(finTxt).slice(1).filter(function(r){return r[0];});FINIQUITOS_RAW=finRows.map(function(r){return{nombre:r[0]||'',fecha:toISO(r[1]),tipo:r[2]||'',montoTotal:Math.abs(cn(r[3])),montoPago:Math.abs(cn(r[4])),estado:r[5]||'',comentario:r[6]||''};});console.log('✅ FINIQUITOS cargados:',FINIQUITOS_RAW.length,'registros');}catch(e){console.warn('FINIQUITOS no disponibles:',e.message);}}
+        // ── COBRANZA MANUAL (override desde Firestore, compartido entre cuentas) ──
+        // Si hay una carga manual guardada en la nube, tiene prioridad sobre Google Sheets.
+        try{
+          if(db){
+            var cobDoc=await db.collection('shared_data').doc('cobranza').get();
+            if(cobDoc.exists){
+              var cd=cobDoc.data();
+              if(cd&&cd.pending&&cd.pending.length){
+                COB_PENDIENTES=cd.pending;
+                if(cd.kpis)COB_KPIS=cd.kpis;
+                if(cd.porMes)COB_POR_MES=cd.porMes;
+                if(cd.porEj)COB_POR_EJECUTIVO=cd.porEj;
+                if(cd.topClientes)COB_TOP_CLIENTES=cd.topClientes;
+                setCobVersion(function(v){return v+1;});
+                console.log('✅ COBRANZA cargada desde carga manual (nube):',cd.pending.length,'registros | Subido por:',cd.uploadedBy||'?');
+              }
+            }
+          }
+        }catch(e){console.warn('Cobranza manual (nube) no disponible:',e.message);}
       } catch(e){console.warn('Datos en vivo no disponibles:',e.message);}
       setDataLoaded(true);
     }
@@ -4830,13 +4854,28 @@ function App() {
   };
 
   const [cobVersion, setCobVersion] = useState(0);
-  const handleCobImport = (res) => {
+  const handleCobImport = async (res) => {
     COB_KPIS = res.kpis;
     COB_POR_MES = res.porMes;
     COB_POR_EJECUTIVO = res.porEj;
     COB_TOP_CLIENTES = res.topClientes;
     COB_PENDIENTES = res.pending;
     setCobVersion(v => v+1); // force re-render
+    // Persistir en la nube: sobrevive recargas y lo ven todas las cuentas (doc compartido)
+    try {
+      const user = firebase.auth().currentUser;
+      if (db && user) {
+        await db.collection('shared_data').doc('cobranza').set({
+          pending: res.pending, kpis: res.kpis, porMes: res.porMes,
+          porEj: res.porEj, topClientes: res.topClientes,
+          fileName: res.file || '', sheetName: res.sheetName || '',
+          uploadedBy: user.email || '', uploadedAt: Date.now()
+        });
+        console.log('☁️ Cobranza guardada en la nube (shared_data/cobranza).');
+      } else {
+        console.warn('Cobranza NO guardada en la nube: falta sesión o conexión.');
+      }
+    } catch(e){ console.warn('Error al guardar cobranza en la nube:', e.message); }
   };
 
   const navItems=[
