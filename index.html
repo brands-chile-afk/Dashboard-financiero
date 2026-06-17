@@ -6554,52 +6554,42 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
     return timelineData.find(r => r.final < 0) || null;
   }, [timelineData]);
 
-  // Hook para pintar gráfico de ApexCharts
+  // Gráfico de ApexCharts: se crea UNA sola vez y luego solo se actualizan los datos.
+  // (Recrear el gráfico en cada cambio de control era lo que lo hacía lento/pegado.)
+  const chartRef = React.useRef(null);
+
+  // 1) Crear el gráfico una sola vez (al montar)
   useEffect(() => {
     const el = document.getElementById('chart-runway-proyeccion');
     if (!el || typeof ApexCharts === 'undefined') return;
-    
     el.innerHTML = '';
     const options = {
-      series: [{
-        name: 'Caja Proyectada',
-        data: projectedBalances
-      }],
+      series: [{ name: 'Caja Proyectada', data: projectedBalances }],
       chart: {
         type: 'area',
         height: 290,
         fontFamily: 'DM Sans, sans-serif',
-        toolbar: { show: false }
+        toolbar: { show: false },
+        // Sin animación al actualizar → respuesta instantánea al mover controles
+        animations: { enabled: true, dynamicAnimation: { enabled: false } }
       },
       colors: ['var(--blue)'],
       dataLabels: {
         enabled: true,
         formatter: (val) => fmt(val),
-        style: {
-          fontSize: '9px',
-          fontFamily: 'DM Sans, sans-serif',
-          fontWeight: 600
-        }
+        style: { fontSize: '9px', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }
       },
       stroke: { curve: 'smooth', width: 3 },
       fill: {
         type: 'gradient',
-        gradient: {
-          shadeIntensity: 1,
-          opacityFrom: 0.3,
-          opacityTo: 0.02,
-          stops: [0, 95, 100]
-        }
+        gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.02, stops: [0, 95, 100] }
       },
       xaxis: {
         categories: monthsLabels,
         labels: { style: { colors: 'var(--t3)', fontSize: '11px' } }
       },
       yaxis: {
-        labels: {
-          formatter: (val) => fmt(val, true),
-          style: { colors: 'var(--t3)', fontSize: '11px' }
-        }
+        labels: { formatter: (val) => fmt(val, true), style: { colors: 'var(--t3)', fontSize: '11px' } }
       },
       annotations: {
         yaxis: [{
@@ -6615,15 +6605,21 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           }
         }]
       },
-      tooltip: {
-        y: { formatter: (val) => fmt(val) },
-        theme: 'light'
-      }
+      tooltip: { y: { formatter: (val) => fmt(val) }, theme: 'light' }
     };
-    
     const chart = new ApexCharts(el, options);
     chart.render();
-    return () => chart.destroy();
+    chartRef.current = chart;
+    return () => { chart.destroy(); chartRef.current = null; };
+  }, []);
+
+  // 2) Actualizar SOLO los datos cuando cambian (sin recrear, sin animación → instantáneo)
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.updateOptions({
+      series: [{ name: 'Caja Proyectada', data: projectedBalances }],
+      xaxis: { categories: monthsLabels }
+    }, false, false); // (options, redrawPaths=false, animate=false)
   }, [projectedBalances, monthsLabels]);
 
   return (
