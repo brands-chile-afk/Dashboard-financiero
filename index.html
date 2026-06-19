@@ -2068,10 +2068,12 @@ function VentasPage({ onUpload, dataLoaded }) {
           countVencido, saldoVencido, countPendiente, saldoPendiente } = COB_KPIS;
   const pctCobrado = ((totalPagado / totalFacturado) * 100).toFixed(1);
 
-  // Pendientes filtrados
+  // Pendientes filtrados (MEMOIZADO): antes este filtro+ordenamiento corría en CADA render
+  // (cada clic en la página). Ahora solo recalcula al cambiar búsqueda/filtro o al cargar
+  // nuevos datos de cobranza → la página responde mucho más fluida.
   const hayBusqueda = busqueda.trim().length > 0;
-  const sortFecha = (a,b) => (b.fechaPago||b.fechaEmision||'').localeCompare(a.fechaPago||a.fechaEmision||'');
-  const pendientesFiltrados = (() => {
+  const pendientesFiltrados = useMemo(() => {
+    const sortFecha = (a,b) => (b.fechaPago||b.fechaEmision||'').localeCompare(a.fechaPago||a.fechaEmision||'');
     const todos = COB_PENDIENTES.filter(r => {
       if (filtroEstado !== 'Todos' && r.estado !== filtroEstado) return false;
       if (hayBusqueda) {
@@ -2092,10 +2094,10 @@ function VentasPage({ onUpload, dataLoaded }) {
     const factoring = todos.filter(r => r.estado==='FACTORING').sort(sortFecha).slice(0,50);
     const otros     = todos.filter(r => !['PENDIENTE','VENCIDO','PAGADO','FACTORING'].includes(r.estado)).sort(sortFecha).slice(0,50);
     return [...activos, ...factoring, ...pagados, ...otros].sort(sortFecha);
-  })();
+  }, [busqueda, filtroEstado, hayBusqueda, COB_PENDIENTES]);
 
-  // Vencidos criticos
-  const criticos = COB_PENDIENTES.filter(r => r.diasVencido > 30 && r.saldo > 0);
+  // Vencidos críticos (memoizado: depende solo de los datos de cobranza)
+  const criticos = useMemo(() => COB_PENDIENTES.filter(r => r.diasVencido > 30 && r.saldo > 0), [COB_PENDIENTES]);
 
   return (
     <div className="page">
@@ -4479,13 +4481,18 @@ function App() {
     }
   }, []);
 
-  // Sync umbrales to cloud when they change locally
-  useEffect(() => {
+  // Guardar umbrales SOLO cuando el usuario los cambia explícitamente (no en cada render).
+  // Antes esto era un useEffect[umbrales]: como el listener onSnapshot de la nube también hace
+  // setUmbrales con un objeto nuevo, se generaba un BUCLE INFINITO
+  // escritura → snapshot → setUmbrales → escritura → ... que inundaba Firebase con cientos de
+  // timeouts y re-renders, trabando todo el dashboard.
+  const handleSaveUmbrales = (nuevosUmbrales) => {
+    setUmbrales(nuevosUmbrales);
     if (fbUser) {
-      saveConfigToCloud({ geminiApiKey: apiKey }, umbrales);
+      saveConfigToCloud({ geminiApiKey: apiKey }, nuevosUmbrales);
       logAuditEvent(`Actualizó los umbrales de alerta financiera`, 'seguridad');
     }
-  }, [umbrales]);
+  };
 
   // unificaciones de Ajustes Manuales con los datos de Google Sheets
   const unificatedMovRecientes = useMemo(() => {
@@ -4899,7 +4906,7 @@ function App() {
       {/* Alert strip — rendered inside main below */}
 
       {/* Alert config panel */}
-      {showAlertCfg && <AlertConfigPanel umbrales={umbrales} setUmbrales={setUmbrales} onClose={()=>setShowAlertCfg(false)}/>}
+      {showAlertCfg && <AlertConfigPanel umbrales={umbrales} setUmbrales={handleSaveUmbrales} onClose={()=>setShowAlertCfg(false)}/>}
 
       {/* Upload modal */}
       {showUpload && <UploadMovPanel onImport={handleImport} onClose={()=>setShowUpload(false)}/>}
