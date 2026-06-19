@@ -4148,7 +4148,7 @@ function PinLock({
 function App() {
   const [locked, setLocked] = useState(true);
   const [col,setCol] = useState(false);
-  const [active,setActive] = useState('home');
+  const [active,setActive] = useState('mov'); // 'mov' (Movimientos) es la página de inicio (antes era 'home'/Resumen, ya removido)
   const [umbrales, setUmbrales] = useState(DEFAULT_UMBRALES);
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
 
@@ -4159,7 +4159,7 @@ function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyBtSZRpBnkfBaCzxkeFptH9qTpu609JK70');
   
   // Whitelist de Accesos
-  const [allowedModules, setAllowedModules] = useState(['home']);
+  const [allowedModules, setAllowedModules] = useState(['mov']);
   const [fbUserRole, setFbUserRole] = useState('Visualizador');
   const [accessDeniedReason, setAccessDeniedReason] = useState(null); // 'not_allowed' | 'suspended' | null
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
@@ -4302,7 +4302,7 @@ function App() {
         delete window.googleAccessToken;
         setFbUser(null);
         setFbUserRole('Visualizador');
-        setAllowedModules(['home']);
+        setAllowedModules(['mov']);
         setAccessDeniedReason(null);
         localStorage.removeItem('GEMINI_API_KEY');
         window.location.reload();
@@ -4373,7 +4373,7 @@ function App() {
                 } else {
                   setFbUser(user);
                   setFbUserRole(data.rol || 'Visualizador');
-                  setAllowedModules(data.modulos && data.modulos.length ? data.modulos : ['home']);
+                  setAllowedModules(data.modulos && data.modulos.length ? data.modulos : ['mov']);
                   setAccessDeniedReason(null);
                   setLastFailedUser(null);
                   setLocked(false);
@@ -4407,7 +4407,7 @@ function App() {
           } else {
             setFbUser(null);
             setFbUserRole('Visualizador');
-            setAllowedModules(['home']);
+            setAllowedModules(['mov']);
             setLocked(true);
             setFbLoading(false);
           }
@@ -4439,10 +4439,11 @@ function App() {
   // Enrutamiento seguro: Redirigir si se intenta acceder a una pestaña no permitida
   useEffect(() => {
     if (!locked && allowedModules && allowedModules.length > 0) {
-      const allowed = allowedModules || ['home'];
-      const isAllowed = allowed.includes(active) && (active !== 'usuarios' || fbUserRole === 'Administrador');
+      const allowed = allowedModules || ['mov'];
+      // 'home' (Resumen) fue removido: si se intenta acceder, se trata como no permitido
+      const isAllowed = active !== 'home' && allowed.includes(active) && (active !== 'usuarios' || fbUserRole === 'Administrador');
       if (!isAllowed) {
-        const fallback = allowed.includes('home') ? 'home' : allowed[0] || 'home';
+        const fallback = allowed.find(m => m !== 'home') || 'mov';
         setActive(fallback);
         localStorage.setItem('fdash_page', fallback);
       }
@@ -4550,8 +4551,9 @@ function App() {
   useEffect(()=>{
     const sc = localStorage.getItem('fdash_col');
     if(sc) setCol(sc==='1');
-    const savedPage = localStorage.getItem('fdash_page') || 'home';
-    setActive(savedPage);
+    // Si había 'home' (Resumen, ya removido) guardado, caer en 'mov' (Movimientos)
+    const savedPage = localStorage.getItem('fdash_page');
+    setActive(savedPage && savedPage !== 'home' ? savedPage : 'mov');
   },[]);
 
   useEffect(()=>{
@@ -4831,7 +4833,6 @@ function App() {
   };
 
   const navItems=[
-    {id:'home', label:'Resumen',     icon:'fon'},
     {id:'mov',  label:'Movimientos', icon:'mov'},
     {id:'gas',  label:'Proyección',  icon:'gas'},
     {id:'ven',  label:'Ventas',      icon:'ven'},
@@ -4995,7 +4996,7 @@ function App() {
               Actualizar
             </button>
           )}
-          {active==='home' && (
+          {active==='gas' && (
             <button onClick={()=>setShowUploadNomina(true)} title={NOMINA_DATA.length?'Nómina cargada: '+NOMINA_MES:'Cargar nómina de sueldos'} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 11px',background:NOMINA_DATA.length?'var(--g600)':'var(--surface)',color:NOMINA_DATA.length?'#fff':'var(--t2)',border:'1px solid var(--border)',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'DM Sans'}}>
               💸 {NOMINA_DATA.length?'Nómina ✓':'Subir Nómina'}
             </button>
@@ -5014,7 +5015,6 @@ function App() {
         </div>
 
         <AlertStrip alerts={visibleAlerts} onClose={dismissAlert}/>
-        {active==='home' && <HomePage saldos={unificatedSaldos} movByMonth={unificatedMovByMonth} gastos={GASTOS} ventas={VENTAS} creditos={CREDITOS} fondos={FONDOS} alerts={[]} onNavTo={nav}/>}
         {active==='mov'  && (
           <MovimientosPage 
             movRecientes={unificatedMovRecientes} 
