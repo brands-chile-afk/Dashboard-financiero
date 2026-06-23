@@ -2,15 +2,16 @@
 
 Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero.
 
-> Última actualización: 2026-06-17
+> Última actualización: 2026-06-19
 
 ---
 
 ## 1. Arquitectura y Stack Tecnológico
 
 - **Frontend**: HTML5 + Vanilla CSS + React 18.3.1 (CDN + Babel standalone para compilación en caliente en el navegador). **Todo el código vive en un único archivo: `index.html`** — componentes React, lógica de datos, estilos CSS y credenciales Firebase están embebidos directamente.
+  - **React se carga en build de PRODUCCIÓN** (`react.production.min.js` / `react-dom.production.min.js`), no development. Todas las librerías se cargan con `defer` y **Babel es el último script** (al cargar, compila la app inline cuando React/Firebase/ApexCharts ya están listos). Ver sección 14 (Rendimiento).
 - **Diseño y UI**: Interfaz "premium" estilo Glassmorphism, modo claro/oscuro, micro-animaciones, renderizado reactivo sin recargar.
-- **Gráficos**: ApexCharts (CDN).
+- **Gráficos**: ApexCharts (CDN, **versión fija `@5.15.0`**).
 - **Parsing Excel cliente**: SheetJS/XLSX.js v0.18.5 (CDN) — usado en `UploadVentasPanel`, `UploadNominaPanel`, `UploadMovPanel`.
 - **Backend / BaaS**: Firebase SDK v10.8.0 (librería **compat**). Servicios:
   - `Firebase Authentication` — login con Google OAuth.
@@ -90,20 +91,22 @@ service cloud.firestore {
 ## 4. Módulos y Páginas
 
 ### Orden del menú lateral (actual):
-`Resumen → Movimientos → Proyección → Ventas → Fondos → Créditos → Finiquitos → Simulador → Analista IA → Nube Cloud → Accesos y Roles`
+`Movimientos → Proyección → Ventas → Fondos → Créditos → Finiquitos → Simulador → Analista IA → Nube Cloud → Accesos y Roles`
 
-> **Simulador** fue movido intencionalmente debajo de **Finiquitos** el 2026-06-16.
+> **Movimientos** es la **página de inicio por defecto** (el módulo **Resumen/`home` fue eliminado** el 2026-06-19). **Simulador** fue movido debajo de **Finiquitos** el 2026-06-16.
 
 ### Descripción de módulos:
 
-- **Resumen (home)**: KPIs de caja, cobranza vencida, nómina del mes, anticipos, gastos fijos.
-- **Movimientos (mov)**: Conciliación colaborativa. Ajustes provisionales de caja e iconos `💬` por transacción para cambiar estado — guardado en Firestore con responsable y comentario. Data slicing: 50–100 filas más relevantes.
+- ~~**Resumen (home)**~~ — **ELIMINADO (2026-06-19).** El id `'home'` sigue apareciendo como rama muerta en un par de condicionales (`n.id==='home'`) inofensivas. El botón "Subir Nómina" que vivía aquí se movió a la barra de **Proyección**.
+- **Movimientos (mov)** *(página de inicio)*: Conciliación colaborativa. Ajustes provisionales de caja e iconos `💬` por transacción para cambiar estado — guardado en Firestore con responsable y comentario. Data slicing: 50–100 filas más relevantes.
 - **Proyección/Egresos (gas)**: Nómina de sueldos + anticipos + gastos fijos. Dos tarjetas separadas: `NominaSectionCard` y `AnticiposSectionCard` (leídas desde la hoja SUELDOS de Google Sheets).
-- **Ventas/Cobranza (ven)**: Facturas pendientes con filtros de estado, búsqueda global, resumen por ejecutivo, top clientes. Botón de **subida manual de Excel** (`UploadVentasPanel`) que sobreescribe los datos de Google Sheets y los persiste en Firestore.
+- **Ventas/Cobranza (ven)**: Facturas pendientes con filtros de estado y búsqueda global. Botón de **subida manual de Excel** (`UploadVentasPanel`) que sobreescribe los datos de Google Sheets y los persiste en Firestore. Tiene **3 pestañas**: `Resumen`, `Top Clientes` y `Activos`. (Las pestañas **"Por Mes"** y **"Ejecutivos"** fueron eliminadas el 2026-06-18; el cálculo interno `COB_POR_MES` / `COB_POR_EJECUTIVO` se mantiene en el procesamiento de datos por si se reutiliza, pero no se muestra.)
 - **Fondos (fon)**: Saldos bancarios por banco.
 - **Créditos (cre)**: Créditos y préstamos activos desde Google Sheets.
 - **Finiquitos (fin)**: Finiquitos pendientes y préstamos a trabajadores.
 - **Simulador (sim)**: Gráfico de área con línea de déficit ($0). Switches para incluir/excluir: remuneraciones **(sueldos + anticipos)**, créditos, gastos fijos, finiquitos y gastos variables. Tabla con desglose transparente día a día o mes a mes.
+  - **Plazo por defecto: 15 días (vista diaria)** (antes 12 meses).
+  - **Fechas de pago en modo diario**: sueldos el **día 30** (fin de mes), anticipos el **día 15** (mitad de mes). En modo mensual ambos se agregan al mes correspondiente.
 - **Analista IA (ia)**: CFO virtual. Modo offline (NLP local) + modo online (Gemini 2.5 Flash con API Key). Runway usa `sueldosTotal + anticiposTotal + fijosTotal` en el denominador.
 - **Nube Cloud (cloud)**: Panel de configuración de Firebase/Firestore.
 - **Accesos y Roles (admin)**: Gestión de `allowed_users`, aprobación de solicitudes de acceso, audit log.
@@ -198,7 +201,7 @@ if (bestScore < 2) headerRowIdx = 0;
 
 También corregido: `find('rut')` → `find('rut','código legal','codigo legal')` para mapear correctamente la columna RUT/Código Legal del archivo real.
 
-**Validado contra el archivo real**: 54 facturas, $155,199,690 total facturado, $153,722,295 saldo pendiente — coincide exactamente con los KPIs de la hoja.
+**Validado contra el archivo real**: 54 facturas, $155,199,690 total facturado, $153,722,295 saldo pendiente — coincide exactamente con los KPIs de la hoja. ✅ **Desplegado y funcionando en vivo** (commit `fe25b9a`).
 
 ### Persistencia en Firestore (`shared_data/cobranza`)
 
@@ -340,25 +343,42 @@ Dashboard financiero/
 - **Remote local**: apunta a `dashboard-financiero` en minúsculas. Funciona por redirect de GitHub. Para actualizar: `git remote set-url origin https://github.com/brands-chile-afk/Dashboard-financiero.git` (pendiente, no urgente).
 - **Rama activa**: `main`
 
-### Commits recientes:
+### Commits recientes (los más nuevos arriba):
 
-| Hash      | Mensaje                                                             |
-|-----------|---------------------------------------------------------------------|
-| `142bff4` | Consolidar documentacion en un solo .md actualizado                |
-| `4d9e93a` | Agregar anticipos (2da tabla SUELDOS) y corregir total de nomina   |
-| `d26bfa7` | docs: add roadmap phase 3 to context prompt                        |
-| `34ce45e` | docs: update context markdown for new chat migration               |
-| `fc80eab` | feat: show cheques/gastos explicitly in simulator table            |
+| Hash      | Mensaje                                                                       |
+|-----------|-------------------------------------------------------------------------------|
+| `7f92ec7` | feat: simulador abre por defecto en 15 días (antes 12 meses)                 |
+| `4d16efb` | fix: anticipos se pagan el día 15, no junto a sueldos el día 30              |
+| `1c25568` | feat: quitar módulo Resumen, inicio por defecto en Movimientos               |
+| `2b96dd5` | perf: romper bucle infinito de Firebase y memoizar filtro de Ventas          |
+| `73c3f4a` | feat: quitar pestañas 'Por Mes' y 'Ejecutivos' del módulo Ventas             |
+| `5d5f8fc` | perf: carga más rápida — React producción, scripts con defer, ApexCharts fijado |
+| `50babd8` | perf: simulador fluido — actualizar gráfico en vez de recrearlo              |
+| `fe25b9a` | fix: detección correcta de encabezados al subir Excel de cobranza            |
+| `142bff4` | Consolidar documentacion en un solo .md actualizado                          |
+| `4d9e93a` | Agregar anticipos (2da tabla SUELDOS) y corregir total de nomina             |
 
-> ⚠️ **Los cambios de la sesión 2026-06-17** (fix `UploadVentasPanel` + persistencia Firestore en `handleCobImport`/`loadLiveData`) **están en `index.html` local pero NO commiteados ni pusheados.** Hacer commit + push después de confirmar que la regla de Firestore funciona correctamente.
+> Todos los cambios listados están **commiteados, pusheados y desplegados en vivo** en GitHub Pages.
 
 ---
 
 ## 11. Historial de Cambios
 
-### 2026-06-17 (⚠️ pendiente de commit)
-- **Fix `UploadVentasPanel`** — corrección del algoritmo de detección de fila de headers en el Excel de cobranza. El algoritmo anterior (`findIndex` con umbral ≥ 2) confundía la fila de labels de KPIs (fila 1) con los encabezados reales (fila 4). Reemplazado por algoritmo "best-score" que escanea las primeras 25 filas y elige la que tiene más coincidencias de keywords. Validado: 54 facturas, $155,199,690 total, $153,722,295 saldo.
-- **Persistencia de cobranza en Firestore (`shared_data/cobranza`)**: `handleCobImport` convertido a `async`, guarda en Firestore tras la carga. `loadLiveData` lee el documento al arrancar y sobreescribe datos de Sheets si existe. **BLOQUEADO** hasta agregar regla en Firebase Console (ver sección 7).
+### 2026-06-19 — Ajustes de módulos y Simulador
+- **Módulo Resumen (`home`) eliminado.** Ya no aparece en el menú. **Movimientos** es la nueva página de inicio. Fallbacks/página por defecto cambiados de `'home'` a `'mov'`; si un usuario tenía `'home'` guardado en `localStorage`, se redirige a Movimientos. El botón **"Subir Nómina"** se movió de la barra de Resumen a la de **Proyección**. (commit `1c25568`)
+- **Simulador — anticipos el día 15.** En modo diario, sueldos y anticipos caían ambos el día 30. Ahora: sueldos día 30, anticipos día 15 (fechas de pago reales). (commit `4d16efb`)
+- **Simulador — plazo por defecto 15 días** (antes 12 meses). (commit `7f92ec7`)
+
+### 2026-06-18 / 2026-06-19 — Rendimiento (gran sesión de optimización)
+- **🔥 BUCLE INFINITO DE FIREBASE ROTO (la causa principal de la lentitud general).** El listener `onSnapshot` de `users/{uid}` hacía `setUmbrales` con un objeto nuevo, y un `useEffect[umbrales]` escribía a la nube en cada cambio → la escritura volvía a disparar el snapshot → **bucle infinito** que generaba 1000+ escrituras/timeouts y re-renders completos de la App por carga. Solución: los umbrales ahora se guardan **solo cuando el usuario los cambia explícitamente** (`handleSaveUmbrales`), no vía `useEffect`. Verificado: **1000+ errores → 0**. (Esto también resolvió el issue pre-existente del timeout `saveConfigToCloud`.)
+- **React build de producción + `defer` + ApexCharts fijado a `@5.15.0`.** Antes se usaba React *development* (2-5× más lento) y los scripts bloqueaban el parseo. Resultado medido: **DOM interactivo 4974ms → 70ms; carga total 10.8s → 6.5s**. Babel reubicado como último script (necesario para que el `defer` no rompa la app).
+- **Gráfico del Simulador: se crea una vez y se actualiza con `updateOptions(animate=false)`** en vez de destruirse/recrearse en cada cambio de control. Antes se pegaba al mover sliders/checkboxes.
+- **`VentasPage.pendientesFiltrados` memoizado** (`useMemo`, deps `[busqueda, filtroEstado, hayBusqueda, COB_PENDIENTES]`). Antes filtraba+ordenaba en cada render/clic.
+- **Módulo Ventas: eliminadas las pestañas "Por Mes" y "Ejecutivos"** (botones + contenido + variables `ejecutivos`/`maxEj` ya sin uso). Quedan: Resumen, Top Clientes, Activos.
+
+### 2026-06-17
+- **Fix `UploadVentasPanel`** — corrección del algoritmo de detección de fila de headers en el Excel de cobranza. El algoritmo anterior (`findIndex` con umbral ≥ 2) confundía la fila de labels de KPIs (fila 1) con los encabezados reales (fila 4). Reemplazado por algoritmo "best-score" que escanea las primeras 25 filas y elige la que tiene más coincidencias de keywords. Validado: 54 facturas, $155,199,690 total, $153,722,295 saldo. ✅ Desplegado.
+- **Persistencia de cobranza en Firestore (`shared_data/cobranza`)**: `handleCobImport` convertido a `async`, guarda en Firestore tras la carga. `loadLiveData` lee el documento al arrancar y sobreescribe datos de Sheets si existe. Código desplegado pero **BLOQUEADO** hasta agregar regla en Firebase Console (ver sección 7).
 
 ### 2026-06-16
 - **Anticipos (2da tabla SUELDOS)**: soporte completo — parsing automático de la 2da tabla de la hoja SUELDOS, componente `AnticiposSectionCard`, KPI "Anticipos del Mes", incluido como egreso en Simulador y Analista IA. Checkbox del simulador renombrado a "Remuneraciones (Sueldos + Anticipos)".
@@ -382,10 +402,10 @@ Dashboard financiero/
 | # | Prioridad | Estado | Descripción |
 |---|-----------|--------|-------------|
 | 1 | **CRÍTICO** | Bloqueado | Regla Firestore `shared_data` no existe → carga de cobranza no persiste entre recargas ni cuentas. Solución: agregar regla en Firebase Console (ver sección 7). |
-| 2 | Alta | Pendiente | Cambios de `index.html` (fix Ventas + persistencia Firestore) **no están commiteados**. Hacer `git add index.html && git commit && git push` después de verificar la regla. |
+| 2 | Media | Sin investigar | Usuario reportó: "cuando subo la cartola de BCI no está actualizando en el VPS". Requiere aclaración: ¿dónde se sube el archivo? ¿qué proceso lo consume? ¿hay mensaje de error visible? ¿hay acceso SSH al VPS? |
 | 3 | Baja | Pendiente | Remote URL del repo local en minúsculas funciona por redirect. Para normalizar: `git remote set-url origin https://github.com/brands-chile-afk/Dashboard-financiero.git`. |
-| 4 | Media | Sin investigar | Usuario reportó: "cuando subo la cartola de BCI no está actualizando en el VPS". Requiere aclaración: ¿dónde se sube el archivo? ¿qué proceso lo consume? ¿hay mensaje de error visible? ¿hay acceso SSH al VPS? |
-| 5 | Baja | Pre-existente | Error recurrente en consola: `La operación 'saveConfigToCloud users update' tardó demasiado` (timeout al guardar config de usuario). No crítico, no introducido recientemente. |
+| 4 | Baja | Opcional | **Nivel 2 de rendimiento (pre-compilar Babel):** quitar Babel del navegador compilando el JSX una sola vez bajaría la carga de ~6.5s a ~2s. Contra: cada edición futura pasa por un paso de compilación (idealmente vía GitHub Action). Ver sección 14. |
+| ~~5~~ | ~~Baja~~ | ✅ **RESUELTO** | ~~Timeout recurrente `saveConfigToCloud`~~ — era síntoma del bucle infinito de Firebase, resuelto el 2026-06-18 (commit `2b96dd5`). |
 
 ---
 
@@ -395,3 +415,23 @@ Dashboard financiero/
 2. **Plantillas de WhatsApp para Cobranza**: botón en Ventas para clientes con +15 días de vencimiento que abra WhatsApp Web con mensaje de cobro pre-armado.
 3. **Termómetro de Metas de Facturación**: indicador en Resumen que compare facturación del mes vs una meta configurable.
 4. **Ingreso Rápido de Egresos sin Excel**: formulario/botón flotante para registrar gastos directo a la nube (Firestore).
+
+---
+
+## 14. Rendimiento (notas y aprendizajes)
+
+### Estado actual (medido en local, 2026-06-19)
+- **DOM interactivo: ~70 ms** (antes 4974 ms).
+- **Carga total: ~6.5 s** (antes 10.8 s). El grueso restante son los ~4.6 s de **Babel compilando en el navegador** en cada carga.
+- Interacción (clics, cambio de módulo): fluida tras romper el bucle infinito de Firebase.
+
+### Reglas/aprendizajes para no volver a romper el rendimiento
+1. **NO usar `react.development.js`** en producción — siempre `*.production.min.js`.
+2. **Babel siempre el último `<script defer>`**: al cargar, compila la app inline; si carga antes que React/Firebase/ApexCharts, la app crashea.
+3. **Cuidado con `useEffect` que escriben a Firestore vigilando estado que también actualiza un `onSnapshot`** → bucle infinito. Patrón seguro: guardar a la nube **solo en handlers explícitos del usuario**, no en `useEffect[estado]`.
+4. **Gráficos ApexCharts**: crear una vez (en `ref`) y actualizar con `updateOptions(opts, false, false)`. Nunca `new ApexCharts()` + `render()` + `destroy()` en cada cambio.
+5. **Memoizar** filtros/ordenamientos pesados con `useMemo` (incluir en deps las variables globales reasignadas como `COB_PENDIENTES`).
+6. **Listas grandes**: renderizar solo 50–100 filas (`.slice`), nunca miles de `<tr>`.
+
+### Nivel 2 pendiente (opcional, el salto grande de carga)
+Pre-compilar el JSX una sola vez (quitar Babel del navegador) bajaría la carga de ~6.5 s a **~2 s**. Implica un paso de compilación antes de publicar — idealmente una **GitHub Action** que compile en cada push para no cambiar el flujo de edición. Ver issue #4.
