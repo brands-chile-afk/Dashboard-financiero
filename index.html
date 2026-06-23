@@ -6407,10 +6407,11 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
           return d.getFullYear() === projDate.getFullYear() && d.getMonth() === projDate.getMonth() && d.getDate() === projDate.getDate();
         }).reduce((s, f) => s + f.montoPago, 0) : 0;
 
-        // 5. Sueldos este día (si el día de la fecha es el 30 del mes)
+        // 5. Sueldos el día 30 (fin de mes); Anticipos el día 15 (mitad de mes) — fechas de pago distintas
         const isSueldosDay = projDate.getDate() === 30;
+        const isAnticiposDay = projDate.getDate() === 15;
         const sueldosDia = (incluirSueldos && isSueldosDay) ? NOMINA_DATA.reduce((s, e) => s + e.monto, 0) : 0;
-        const anticiposDia = (incluirSueldos && isSueldosDay) ? ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0) : 0;
+        const anticiposDia = (incluirSueldos && isAnticiposDay) ? ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0) : 0;
 
         // 6. Gastos Fijos este día
         const fijosDia = incluirFijos ? GASTOS_FIJOS_DATA.filter(g => g.dia_pago === projDate.getDate()).reduce((s, f) => s + f.monto, 0) : 0;
