@@ -1211,7 +1211,10 @@ function MovimientosPage({
   const ingresos = months.map(m=>MOV_BY_MONTH[m].ingresos);
   const gastos_m = months.map(m=>MOV_BY_MONTH[m].gastos);
   const labels = months.map(fmtMonth);
-  const cur = MOV_BY_MONTH['2026-04'];
+  // Robusto ante datos aún no cargados (en carga fresca MOV_BY_MONTH puede estar vacío)
+  const EMPTY_MES = {ingresos:0, gastos:0};
+  const mes = (k) => MOV_BY_MONTH[k] || EMPTY_MES;
+  const cur = mes('2026-04');
   const movRecientesList = movRecientes || MOV_RECIENTES;
   const totalBancario = Object.values(saldos || SALDOS_BANCO).reduce((a,b)=>a+b,0);
   const maxSaldo = Math.max(...Object.values(saldos || SALDOS_BANCO));
@@ -1251,10 +1254,10 @@ function MovimientosPage({
 
       <div className="kpi-grid">
         {[
-          {label:'Ingresos Abril',   val:fmt(cur.ingresos), sub:'+'+((cur.ingresos/MOV_BY_MONTH['2026-03'].ingresos-1)*100).toFixed(1)+'% vs Mar', dir:'g', icon:'ven'},
-          {label:'Gastos Abril',     val:fmt(cur.gastos),   sub:'+'+((cur.gastos/MOV_BY_MONTH['2026-03'].gastos-1)*100).toFixed(1)+'% vs Mar',    dir:'a', icon:'gas'},
-          {label:'Ingresos Febrero', val:fmt(MOV_BY_MONTH['2026-02'].ingresos), sub:'mayor mes registrado', dir:'g', icon:'mov'},
-          {label:'Gastos Febrero',   val:fmt(MOV_BY_MONTH['2026-02'].gastos),   sub:'mayor mes registrado', dir:'r', icon:'gas'},
+          {label:'Ingresos Abril',   val:fmt(cur.ingresos), sub:'+'+((cur.ingresos/(mes('2026-03').ingresos||1)-1)*100).toFixed(1)+'% vs Mar', dir:'g', icon:'ven'},
+          {label:'Gastos Abril',     val:fmt(cur.gastos),   sub:'+'+((cur.gastos/(mes('2026-03').gastos||1)-1)*100).toFixed(1)+'% vs Mar',    dir:'a', icon:'gas'},
+          {label:'Ingresos Febrero', val:fmt(mes('2026-02').ingresos), sub:'mayor mes registrado', dir:'g', icon:'mov'},
+          {label:'Gastos Febrero',   val:fmt(mes('2026-02').gastos),   sub:'mayor mes registrado', dir:'r', icon:'gas'},
         ].map((k,i)=>(
           <div className="kcard" key={i}>
             <div className={`kcard-icon ${k.dir}`}><IC n={k.icon} s={16}/></div>
