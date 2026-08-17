@@ -562,8 +562,14 @@ let ANTICIPOS_DATA = [];    // { empresa, personas, monto } — 2da tabla (antic
 const GID_SUELDOS = '998795265';
 const GID_GASTOS_FIJOS = '1222067969';
 const GID_FINIQUITOS = '1916149630';
+const GID_RESUMENES_SII = '437226100';
+const GID_CUADRE_IVA = '707671342';
 let FINIQUITOS_RAW = [];
 let CREDITOS_SHEETS_RAW = [];
+// { empresa,periodo,operacion,estado,cod,tipoDoc,docs,exento,neto,ivaRecuperable,ivaUsoComun,ivaNoRecuperable,total,factor } — resúmenes oficiales por tipo de documento del SII (sii-dashboard/ingest.py --resumenes)
+let RESUMENES_SII_DATA = [];
+// { empresa,periodo,docsVenta,ventasNetas,ventasExentas,ivaDebito,ventasTotal,docsCompra,comprasNetas,comprasExentas,ivaCredito,comprasTotal,ivaNoRecuperable,otrosImpuestos,ivaDeterminado,resultado,ncVenta,ncCompra,docsPendientes,ivaPendiente } — cuadre de IVA por empresa y mes
+let CUADRE_IVA_DATA = [];
 const COB_PAGADOS = [{"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 1925, "fechaEmision": "2025-08-26", "total": 1904000, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-09-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-07", "ejecutivo": "JAIME GONZALEZ"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1934, "fechaEmision": "2025-09-01", "total": 122327, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-01", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1935, "fechaEmision": "2025-09-01", "total": 189384, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-01", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1936, "fechaEmision": "2025-09-01", "total": 96975, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-01", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1937, "fechaEmision": "2025-09-01", "total": 95340, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-01", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1951, "fechaEmision": "2025-09-04", "total": 68336, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-01", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1954, "fechaEmision": "2025-09-10", "total": 105972, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-10", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1955, "fechaEmision": "2025-09-10", "total": 189384, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-10", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1956, "fechaEmision": "2025-09-10", "total": 212941, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-10", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1957, "fechaEmision": "2025-09-10", "total": 185805, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-10", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "71644300-0", "empresa": "UNIVERSIDAD DEL DESARROLLO", "folio": 1960, "fechaEmision": "2025-10-12", "total": 1089088, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-12", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-06", "ejecutivo": "ANGEL"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1961, "fechaEmision": "2025-10-15", "total": 439981, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-15", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1962, "fechaEmision": "2025-10-15", "total": 552073, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-15", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-07", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1972, "fechaEmision": "2025-09-23", "total": 9385054, "saldo": 0, "obs": "LIBROS - GUIA CLIENTE 20095", "vencimiento": "2025-10-23", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-18", "ejecutivo": "BRIAN"}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 1976, "fechaEmision": "2025-09-24", "total": 2572304, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-24", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-07", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1977, "fechaEmision": "2025-09-24", "total": 158412, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-24", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-14", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1978, "fechaEmision": "2025-09-24", "total": 821718, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-10-24", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-14", "ejecutivo": "BRIAN"}, {"rut": "77471270-4", "empresa": "AGROCOMERCIAL CODIGUA SPA", "folio": 1981, "fechaEmision": "2025-09-26", "total": 959438, "saldo": 0, "obs": "00774712704 F19812022 $1.347.854", "vencimiento": "2025-10-26", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-24", "ejecutivo": ""}, {"rut": "60802000-4", "empresa": "DIRECCION DE PRESUPUESTOS MINISTERIO DE", "folio": 1986, "fechaEmision": "2025-09-30", "total": 654798, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-10-30", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-30", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 1993, "fechaEmision": "2025-10-01", "total": 73185, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2025-10-31", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-10-31", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1997, "fechaEmision": "2025-10-02", "total": 390302, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1998, "fechaEmision": "2025-10-02", "total": 61359, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 1999, "fechaEmision": "2025-10-02", "total": 40849, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2000, "fechaEmision": "2025-10-02", "total": 317149, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2001, "fechaEmision": "2025-10-02", "total": 65559, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2005, "fechaEmision": "2025-10-03", "total": 2762466, "saldo": 0, "obs": "LIBRO COSTRURA HILO", "vencimiento": "2025-11-02", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": "Ma Fernanda Catalan"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2006, "fechaEmision": "2025-10-03", "total": 3060085, "saldo": 0, "obs": "LIBRO COSTRURA HILO", "vencimiento": "2025-11-02", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": "Ma Fernanda Catalan"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2008, "fechaEmision": "2025-10-06", "total": 492660, "saldo": 0, "obs": "", "vencimiento": "2025-11-05", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-05", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2009, "fechaEmision": "2025-10-06", "total": 1349460, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2025-11-05", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-05", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2012, "fechaEmision": "2025-10-07", "total": 184377, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2013, "fechaEmision": "2025-10-07", "total": 120016, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2014, "fechaEmision": "2025-10-07", "total": 3285897, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-26", "ejecutivo": "BRIAN"}, {"rut": "61513000-1", "empresa": "DIRECCION PREVISION DE CARABINEROS DE CHILE", "folio": 2015, "fechaEmision": "2025-10-07", "total": 2359770, "saldo": 0, "obs": "IMPRESIONES / BLOCK", "vencimiento": "2025-11-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-06", "ejecutivo": ""}, {"rut": "71644300-0", "empresa": "UNIVERSIDAD DEL DESARROLLO", "folio": 2018, "fechaEmision": "2025-10-09", "total": 3374840, "saldo": 0, "obs": "REVISTA / GUIA_4183", "vencimiento": "2025-11-08", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-06", "ejecutivo": "ANGEL"}, {"rut": "76089394-3", "empresa": "CALIGRAFIX SPA", "folio": 2021, "fechaEmision": "2025-10-13", "total": 213415, "saldo": 0, "obs": "MAQUETAS", "vencimiento": "2025-11-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "77471270-4", "empresa": "AGROCOMERCIAL CODIGUA SPA", "folio": 2022, "fechaEmision": "2025-10-13", "total": 388416, "saldo": 0, "obs": "00774712704 F19812022 $1.347.854", "vencimiento": "2025-11-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-24", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2023, "fechaEmision": "2025-10-13", "total": 391986, "saldo": 0, "obs": "MANUALES / DIPLOMAS", "vencimiento": "2025-11-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-12", "ejecutivo": ""}, {"rut": "60901002-9", "empresa": "SUBSECRETARIA DE LAS CULTURAS Y LAS ARTES", "folio": 2024, "fechaEmision": "2025-10-13", "total": 12146330, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-12", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2025, "fechaEmision": "2025-10-14", "total": 468012, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-13", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-09", "ejecutivo": "BRIAN"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2026, "fechaEmision": "2025-10-15", "total": 349860, "saldo": 0, "obs": "STICKERS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-11", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2027, "fechaEmision": "2025-10-15", "total": 963818, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2028, "fechaEmision": "2025-10-15", "total": 298370, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2029, "fechaEmision": "2025-10-15", "total": 591366, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2030, "fechaEmision": "2025-10-15", "total": 170935, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "", "ejecutivo": "BRIAN"}, {"rut": "60203000-8", "empresa": "BIBLIOTECA DEL CONGRESO NACIONAL", "folio": 2031, "fechaEmision": "2025-10-15", "total": 5999980, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-19", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2032, "fechaEmision": "2025-10-16", "total": 5363092, "saldo": 0, "obs": "", "vencimiento": "2025-11-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-11", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2033, "fechaEmision": "2025-10-16", "total": 4837350, "saldo": 0, "obs": "", "vencimiento": "2025-11-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-11", "ejecutivo": ""}, {"rut": "77822502-6", "empresa": "EDICIONES CONTRERAS Y ESCANDON LIMITADA", "folio": 2037, "fechaEmision": "2025-10-20", "total": 2127720, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-25", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2038, "fechaEmision": "2025-10-20", "total": 269610, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2039, "fechaEmision": "2025-10-20", "total": 213454, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2040, "fechaEmision": "2025-10-20", "total": 440327, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2041, "fechaEmision": "2025-10-20", "total": 521423, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "60910000-1", "empresa": "UNIVERSIDAD DE CHILE", "folio": 2047, "fechaEmision": "2025-10-21", "total": 216580, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-11-20", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "70729100-1", "empresa": "UNIVERSIDAD TECNOLOGICA METROPOLITANA", "folio": 2051, "fechaEmision": "2025-10-22", "total": 2763478, "saldo": 0, "obs": "LIBROS (GUIA POR EL TOTAL, DESPACHO DE 268 UND.)", "vencimiento": "2025-11-21", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-28", "ejecutivo": ""}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2056, "fechaEmision": "2025-10-27", "total": 714000, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-11-01", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-11-01", "ejecutivo": ""}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2057, "fechaEmision": "2025-10-27", "total": 856800, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-11-01", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-11-10", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2058, "fechaEmision": "2025-10-27", "total": 137445, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2025-11-26", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-25", "ejecutivo": ""}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2059, "fechaEmision": "2025-10-27", "total": 5355, "saldo": 0, "obs": "DIPLOMAS / RETIRA EL CLIENTE", "vencimiento": "2025-11-26", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-26", "ejecutivo": ""}, {"rut": "60910000-1", "empresa": "UNIVERSIDAD DE CHILE", "folio": 2060, "fechaEmision": "2025-10-28", "total": 216580, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-11-27", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "75564900-7", "empresa": "SOC. ALEMANA PARA LA COOPERACION INTERNACIONAL (GIZ)", "folio": 2061, "fechaEmision": "2025-10-28", "total": 1332800, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-27", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-11", "ejecutivo": ""}, {"rut": "76018478-0", "empresa": "PATAGONIA CHILE LTDA.", "folio": 2062, "fechaEmision": "2025-10-29", "total": 2380000, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-03", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-11-13", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2071, "fechaEmision": "2025-10-30", "total": 4998000, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-01-05", "ejecutivo": ""}, {"rut": "73044000-6", "empresa": "FEDERACION CRIADORES DE CABALLOS RAZA CHILENA", "folio": 2072, "fechaEmision": "2025-10-30", "total": 5078920, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-11-04", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-11-14", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2073, "fechaEmision": "2025-10-30", "total": 67830, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2025-11-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-01", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2077, "fechaEmision": "2025-11-03", "total": 420536, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2078, "fechaEmision": "2025-11-03", "total": 288080, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2079, "fechaEmision": "2025-11-03", "total": 426785, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2080, "fechaEmision": "2025-11-03", "total": 169702, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2081, "fechaEmision": "2025-11-03", "total": 314736, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2082, "fechaEmision": "2025-11-03", "total": 642967, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": "BRIAN"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2088, "fechaEmision": "2025-11-03", "total": 9460500, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2089, "fechaEmision": "2025-11-03", "total": 2018478, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-01", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2090, "fechaEmision": "2025-11-03", "total": 1598884, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2091, "fechaEmision": "2025-11-03", "total": 1130262, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2097, "fechaEmision": "2025-11-05", "total": 434350, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2025-12-05", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-02", "ejecutivo": ""}, {"rut": "76187042-4", "empresa": "BULBOARD MEDIA SPA", "folio": 2098, "fechaEmision": "2025-11-05", "total": 1368500, "saldo": 0, "obs": "REVISTAS", "vencimiento": "2025-12-05", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-03", "ejecutivo": "LEONARDO"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2101, "fechaEmision": "2025-11-06", "total": 1897455, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "62000370-0", "empresa": "SUBSECRETARIA DEL PATRIMONIO CULTURAL", "folio": 2102, "fechaEmision": "2025-11-06", "total": 1981350, "saldo": 0, "obs": "LIBRO", "vencimiento": "2025-12-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-05", "ejecutivo": ""}, {"rut": "77773113-0", "empresa": "HUX CONSULTORES LIMITADA", "folio": 2103, "fechaEmision": "2025-11-07", "total": 1155490, "saldo": 0, "obs": "LIBRO", "vencimiento": "2025-11-09", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2025-11-04", "ejecutivo": "JAIME NARANJO"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2104, "fechaEmision": "2025-11-11", "total": 5744606, "saldo": 0, "obs": "", "vencimiento": "2025-12-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-10", "ejecutivo": "LEONARDO"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2105, "fechaEmision": "2025-11-11", "total": 347480, "saldo": 0, "obs": "VIBRIN VENTOSA CENCO", "vencimiento": "2025-12-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-10", "ejecutivo": "LEONARDO"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2107, "fechaEmision": "2025-11-13", "total": 2006340, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-13", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2108, "fechaEmision": "2025-11-13", "total": 2172345, "saldo": 0, "obs": "LIBRO", "vencimiento": "2025-12-13", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "77822502-6", "empresa": "EDICIONES CONTRERAS Y ESCANDON LIMITADA", "folio": 2109, "fechaEmision": "2025-11-14", "total": 973004, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-26", "ejecutivo": ""}, {"rut": "76005909-9", "empresa": "COMERCIAL MOTORES DE LOS ANDES SPA", "folio": 2110, "fechaEmision": "2025-11-14", "total": 6949600, "saldo": 0, "obs": "LIBRILLO", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "76005909-9", "empresa": "COMERCIAL MOTORES DE LOS ANDES SPA", "folio": 2111, "fechaEmision": "2025-11-14", "total": 442680, "saldo": 0, "obs": "POLIZA", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "76005909-9", "empresa": "COMERCIAL MOTORES DE LOS ANDES SPA", "folio": 2112, "fechaEmision": "2025-11-14", "total": 442680, "saldo": 0, "obs": "POLIZA", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "76005909-9", "empresa": "COMERCIAL MOTORES DE LOS ANDES SPA", "folio": 2113, "fechaEmision": "2025-11-14", "total": 1898050, "saldo": 0, "obs": "POLIZA", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "71250500-1", "empresa": "FUND. PARA EL FUNCIONAM. DESARROLLO Y PROM. PLANETARIO", "folio": 2114, "fechaEmision": "2025-11-14", "total": 1835694, "saldo": 0, "obs": "POSTALES, ADHESIVOS", "vencimiento": "2025-11-14", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-10", "ejecutivo": ""}, {"rut": "77175160-1", "empresa": "COMERCIAL DICALLA S A", "folio": 2115, "fechaEmision": "2025-11-14", "total": 1494640, "saldo": 0, "obs": "", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-19", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2117, "fechaEmision": "2025-11-14", "total": 10570770, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2118, "fechaEmision": "2025-11-14", "total": 835230, "saldo": 0, "obs": "FOLLETOS OT82", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "77050426-0", "empresa": "ALIANZA PEDRO DE VALDIVIA LTDA.", "folio": 2119, "fechaEmision": "2025-11-14", "total": 77112, "saldo": 0, "obs": "FOLLETOS OT82 / GUIA: 4427", "vencimiento": "2025-12-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2120, "fechaEmision": "2025-11-19", "total": 665404, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2121, "fechaEmision": "2025-11-19", "total": 235244, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2122, "fechaEmision": "2025-11-19", "total": 1699579, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": "BRIAN"}, {"rut": "61980230-6", "empresa": "AGENCIA CALIDAD DE LA EDUCACIÓN", "folio": 2124, "fechaEmision": "2025-11-19", "total": 2998800, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "76358849-1", "empresa": "CAROLINA VALVERDE LIMITADA", "folio": 2125, "fechaEmision": "2025-11-19", "total": 6560, "saldo": 0, "obs": "", "vencimiento": "2025-12-19", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "76078941-0", "empresa": "ASESORIAS E INVERSIONES SAN CHARBEL SPA", "folio": 2126, "fechaEmision": "2025-11-20", "total": 152725, "saldo": 0, "obs": "MANUALES", "vencimiento": "2025-12-20", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "77516120-5", "empresa": "COMUNICACION IMAGEN Y APOYO EMPRESARIAL LTDA.", "folio": 2127, "fechaEmision": "2025-11-20", "total": 172550, "saldo": 0, "obs": "GUIA: 4487", "vencimiento": "2025-11-25", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-12-30", "ejecutivo": "LEONARDO VILLARROEL"}, {"rut": "71250500-1", "empresa": "FUND. PARA EL FUNCIONAM. DESARROLLO Y PROM. PLANETARIO", "folio": 2128, "fechaEmision": "2025-11-21", "total": 100139, "saldo": 0, "obs": "CREDENCIALES", "vencimiento": "2025-11-21", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-21", "ejecutivo": ""}, {"rut": "76434381-6", "empresa": "SENSUS CONSULTORES LIMITADA", "folio": 2129, "fechaEmision": "2025-11-21", "total": 276854, "saldo": 0, "obs": "MANUALES", "vencimiento": "2025-11-21", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-20", "ejecutivo": ""}, {"rut": "77175160-1", "empresa": "COMERCIAL DICALLA S A", "folio": 2130, "fechaEmision": "2025-11-24", "total": 1494640, "saldo": 0, "obs": "PARANTES", "vencimiento": "2025-12-24", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-19", "ejecutivo": ""}, {"rut": "70819400-K", "empresa": "TRIBUNAL CONSTITUCIONAL", "folio": 2131, "fechaEmision": "2025-11-25", "total": 2385117, "saldo": 0, "obs": "LIBROS TAPA DURA CON FOLIA", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-24", "ejecutivo": ""}, {"rut": "87912900-1", "empresa": "UNIVERSIDAD DE LA FRONTERA", "folio": 2132, "fechaEmision": "2025-11-25", "total": 643314, "saldo": 0, "obs": "MANUALES", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "77049340-4", "empresa": "FERRERAS Y LICCI LIMITADA", "folio": 2133, "fechaEmision": "2025-11-25", "total": 2713200, "saldo": 0, "obs": "", "vencimiento": "2025-11-25", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-11-25", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2136, "fechaEmision": "2025-11-25", "total": 4117400, "saldo": 0, "obs": "LIBROS TAPA DURA", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2137, "fechaEmision": "2025-11-25", "total": 1785000, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2138, "fechaEmision": "2025-11-25", "total": 2306220, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2139, "fechaEmision": "2025-11-25", "total": 2972025, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2140, "fechaEmision": "2025-11-25", "total": 2803164, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2141, "fechaEmision": "2025-11-25", "total": 4097170, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2142, "fechaEmision": "2025-11-25", "total": 1981350, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-01", "ejecutivo": "JAIME"}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2143, "fechaEmision": "2025-11-25", "total": 16779, "saldo": 0, "obs": "IMPRESIONES // CLIENTE RETIRA", "vencimiento": "2025-12-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-29", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2144, "fechaEmision": "2025-11-26", "total": 1731450, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-26", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "65473570-0", "empresa": "CORPORACION DEL DEPORTE DE LA I.MUNICIPALIDAD DE CERRO NAVIA", "folio": 2145, "fechaEmision": "2025-11-27", "total": 21407267, "saldo": 0, "obs": "LIBROS / STICKERS", "vencimiento": "2025-12-27", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-29", "ejecutivo": ""}, {"rut": "70574900-0", "empresa": "FUNDACION INTEGRA", "folio": 2146, "fechaEmision": "2025-11-27", "total": 13220662, "saldo": 0, "obs": "MANUAL", "vencimiento": "2025-12-27", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-24", "ejecutivo": ""}, {"rut": "77050426-0", "empresa": "ALIANZA PEDRO DE VALDIVIA LTDA.", "folio": 2147, "fechaEmision": "2025-11-28", "total": 3248700, "saldo": 0, "obs": "FOLLETOS OT83 / GUIA: 4498", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "77465752-5", "empresa": "SANTILLANA EDUCACIÓN CHILE SPA", "folio": 2148, "fechaEmision": "2025-11-28", "total": 9567600, "saldo": 0, "obs": "LIBROS TAPA DURA", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-05", "ejecutivo": "PAGO SANTANDER GMD"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2149, "fechaEmision": "2025-11-28", "total": 84354, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2150, "fechaEmision": "2025-11-28", "total": 159048, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2151, "fechaEmision": "2025-11-28", "total": 167552, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2152, "fechaEmision": "2025-11-28", "total": 402898, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-20", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2153, "fechaEmision": "2025-11-28", "total": 980215, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-20", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2154, "fechaEmision": "2025-11-28", "total": 211502, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2155, "fechaEmision": "2025-11-28", "total": 230058, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "77050426-0", "empresa": "ALIANZA PEDRO DE VALDIVIA LTDA.", "folio": 2156, "fechaEmision": "2025-11-28", "total": 261800, "saldo": 0, "obs": "FOLLETOS OT86 GUIA:4498", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "60911000-7", "empresa": "UNIVERSIDAD DE SANTIAGO DE CHILE", "folio": 2157, "fechaEmision": "2025-11-28", "total": 2959530, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2159, "fechaEmision": "2025-11-28", "total": 2446640, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2025-12-03", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2160, "fechaEmision": "2025-12-01", "total": 3266550, "saldo": 0, "obs": "LIBROS_x000D_", "vencimiento": "2025-12-31", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "77465752-5", "empresa": "SANTILLANA EDUCACIÓN CHILE SPA", "folio": 2162, "fechaEmision": "2025-12-01", "total": 8240750, "saldo": 0, "obs": "LIBROS TAPA DURA", "vencimiento": "2025-12-31", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-05", "ejecutivo": "PAGO SANTANDER GMD"}, {"rut": "77773113-0", "empresa": "HUX CONSULTORES LIMITADA", "folio": 2163, "fechaEmision": "2025-12-03", "total": 1213800, "saldo": 0, "obs": "BLOCKS", "vencimiento": "2025-12-05", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2025-12-12", "ejecutivo": ""}, {"rut": "77175160-1", "empresa": "COMERCIAL DICALLA S A", "folio": 2164, "fechaEmision": "2025-12-03", "total": 1494640, "saldo": 0, "obs": "PARANTES", "vencimiento": "2026-01-02", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": ""}, {"rut": "60911000-7", "empresa": "UNIVERSIDAD DE SANTIAGO DE CHILE", "folio": 2165, "fechaEmision": "2025-12-04", "total": 5018528, "saldo": 0, "obs": "", "vencimiento": "2026-01-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-26", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2166, "fechaEmision": "2025-12-04", "total": 100931, "saldo": 0, "obs": "", "vencimiento": "2026-01-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2167, "fechaEmision": "2025-12-04", "total": 134081, "saldo": 0, "obs": "", "vencimiento": "2026-01-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2168, "fechaEmision": "2025-12-04", "total": 176382, "saldo": 0, "obs": "", "vencimiento": "2026-01-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "61608604-9", "empresa": "SERV.SALUD METROP.CENTRAL HOSP.CLINICO SAN BORJA ARRIARAN", "folio": 2169, "fechaEmision": "2025-12-04", "total": 104720, "saldo": 0, "obs": "", "vencimiento": "2026-01-03", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-26", "ejecutivo": "ORLANDO"}, {"rut": "77516120-5", "empresa": "COMUNICACION IMAGEN Y APOYO EMPRESARIAL LTDA.", "folio": 2170, "fechaEmision": "2025-12-04", "total": 2356200, "saldo": 0, "obs": "", "vencimiento": "2025-12-09", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-12-30", "ejecutivo": "LEONARDO VILLARROEL"}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2171, "fechaEmision": "2025-12-05", "total": 640220, "saldo": 0, "obs": "", "vencimiento": "2026-01-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-06", "ejecutivo": ""}, {"rut": "78896330-0", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA CONCEPCION LIMITADA", "folio": 2172, "fechaEmision": "2025-12-05", "total": 320110, "saldo": 0, "obs": "", "vencimiento": "2026-01-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-06", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2173, "fechaEmision": "2025-12-05", "total": 12857950, "saldo": 0, "obs": "", "vencimiento": "2026-01-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2174, "fechaEmision": "2025-12-05", "total": 9020200, "saldo": 0, "obs": "", "vencimiento": "2026-01-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-26", "ejecutivo": ""}, {"rut": "70754700-6", "empresa": "UNIVERSIDAD DE PLAYA ANCHA DE CIENCIAS DE LA EDUCACION", "folio": 2175, "fechaEmision": "2025-12-05", "total": 2368100, "saldo": 0, "obs": "", "vencimiento": "2026-01-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-10", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2176, "fechaEmision": "2025-12-12", "total": 2280028, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-17", "ejecutivo": "BRIAN"}, {"rut": "70574900-0", "empresa": "FUNDACION INTEGRA", "folio": 2177, "fechaEmision": "2025-12-12", "total": 58770951, "saldo": 0, "obs": "LIBROS / GUIAS 4483-4564-4567", "vencimiento": "2026-01-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-29", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2180, "fechaEmision": "2025-12-12", "total": 226100, "saldo": 0, "obs": "FICHAS // GUIA:4097", "vencimiento": "2026-01-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2181, "fechaEmision": "2025-12-12", "total": 690200, "saldo": 0, "obs": "BLOCK / CAJAS BUZON / AFICHES", "vencimiento": "2026-01-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "73044000-6", "empresa": "FEDERACION CRIADORES DE CABALLOS RAZA CHILENA", "folio": 2182, "fechaEmision": "2025-12-12", "total": 6267730, "saldo": 0, "obs": "LIBROS / CAJAS", "vencimiento": "2025-12-17", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2025-12-26", "ejecutivo": ""}, {"rut": "70729100-1", "empresa": "UNIVERSIDAD TECNOLOGICA METROPOLITANA", "folio": 2185, "fechaEmision": "2025-12-12", "total": 7137977, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": ""}, {"rut": "77304295-0", "empresa": "CRISTOBAL SEGURA MUDO EDICIONES E.I.R.L.", "folio": 2186, "fechaEmision": "2025-12-12", "total": 2255050, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-12", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-12-05", "ejecutivo": ""}, {"rut": "70819400-K", "empresa": "TRIBUNAL CONSTITUCIONAL", "folio": 2187, "fechaEmision": "2025-12-15", "total": 6794900, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-24", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2188, "fechaEmision": "2025-12-15", "total": 2915500, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2189, "fechaEmision": "2025-12-15", "total": 5497800, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2190, "fechaEmision": "2025-12-15", "total": 3227280, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2191, "fechaEmision": "2025-12-15", "total": 2022955, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "61980230-6", "empresa": "AGENCIA CALIDAD DE LA EDUCACIÓN", "folio": 2192, "fechaEmision": "2025-12-15", "total": 6997200, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-29", "ejecutivo": ""}, {"rut": "60907064-1", "empresa": "CENTRO DE PERFECCIONAMIENTO, EXPERIMENTACION E INV.", "folio": 2193, "fechaEmision": "2025-12-15", "total": 4403952, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-14", "ejecutivo": ""}, {"rut": "60910000-1", "empresa": "UNIVERSIDAD DE CHILE", "folio": 2194, "fechaEmision": "2025-12-15", "total": 1076712, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-30", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2195, "fechaEmision": "2025-12-16", "total": 2559690, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-06", "ejecutivo": "JAIME"}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2196, "fechaEmision": "2025-12-16", "total": 1249500, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-27", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2197, "fechaEmision": "2025-12-16", "total": 2791740, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-16", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-12-30", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2198, "fechaEmision": "2025-12-16", "total": 6927088, "saldo": 0, "obs": "", "vencimiento": "2025-12-16", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": "confirming Bci (jennifer alarcon +56 9 6125 1238)"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2205, "fechaEmision": "2025-12-18", "total": 473620, "saldo": 0, "obs": "", "vencimiento": "2026-01-17", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-14", "ejecutivo": ""}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2206, "fechaEmision": "2025-12-18", "total": 1338750, "saldo": 0, "obs": "", "vencimiento": "2026-01-17", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-23", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2207, "fechaEmision": "2025-12-18", "total": 19040, "saldo": 0, "obs": "", "vencimiento": "2026-01-17", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-19", "ejecutivo": ""}, {"rut": "77773113-0", "empresa": "HUX CONSULTORES LIMITADA", "folio": 2208, "fechaEmision": "2025-12-18", "total": 402696, "saldo": 0, "obs": "", "vencimiento": "2025-12-20", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2025-12-19", "ejecutivo": ""}, {"rut": "71250500-1", "empresa": "FUND. PARA EL FUNCIONAM. DESARROLLO Y PROM. PLANETARIO", "folio": 2210, "fechaEmision": "2025-12-18", "total": 249127, "saldo": 0, "obs": "", "vencimiento": "2026-01-17", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-22", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2211, "fechaEmision": "2025-12-18", "total": 308575, "saldo": 0, "obs": "", "vencimiento": "2026-01-17", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "96563360-K", "empresa": "SUN CHEMICAL (CHILE) S.A.", "folio": 2212, "fechaEmision": "2025-12-19", "total": 7868042, "saldo": 0, "obs": "", "vencimiento": "2026-01-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-19", "ejecutivo": ""}, {"rut": "60905000-4", "empresa": "SERVICIO NACIONAL DEL PATRIMONIO CULTURAL", "folio": 2214, "fechaEmision": "2025-12-19", "total": 68614210, "saldo": 0, "obs": "", "vencimiento": "2026-01-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-12", "ejecutivo": ""}, {"rut": "60905000-4", "empresa": "SERVICIO NACIONAL DEL PATRIMONIO CULTURAL", "folio": 2215, "fechaEmision": "2025-12-19", "total": 1041546, "saldo": 0, "obs": "", "vencimiento": "2026-01-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-30", "ejecutivo": ""}, {"rut": "72754700-2", "empresa": "FUNDACION INSTITUTO PROFESIONAL DUOC UC", "folio": 2216, "fechaEmision": "2025-12-22", "total": 571200, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-21", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-01-09", "ejecutivo": ""}, {"rut": "62000370-0", "empresa": "SUBSECRETARIA DEL PATRIMONIO CULTURAL", "folio": 2217, "fechaEmision": "2025-12-23", "total": 839664, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2026-01-22", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-22", "ejecutivo": ""}, {"rut": "62000370-0", "empresa": "SUBSECRETARIA DEL PATRIMONIO CULTURAL", "folio": 2218, "fechaEmision": "2025-12-23", "total": 839664, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2026-01-22", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-22", "ejecutivo": ""}, {"rut": "62000370-0", "empresa": "SUBSECRETARIA DEL PATRIMONIO CULTURAL", "folio": 2219, "fechaEmision": "2025-12-23", "total": 839664, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2026-01-22", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-22", "ejecutivo": ""}, {"rut": "62000370-0", "empresa": "SUBSECRETARIA DEL PATRIMONIO CULTURAL", "folio": 2220, "fechaEmision": "2025-12-23", "total": 839664, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2026-01-22", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-22", "ejecutivo": ""}, {"rut": "61402000-8", "empresa": "MINISTERIO DE BIENES NACIONALES", "folio": 2221, "fechaEmision": "2025-12-24", "total": 14124110, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-23", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-04", "ejecutivo": ""}, {"rut": "61402000-8", "empresa": "MINISTERIO DE BIENES NACIONALES", "folio": 2222, "fechaEmision": "2025-12-24", "total": 3503360, "saldo": 0, "obs": "", "vencimiento": "2026-01-23", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-04", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2223, "fechaEmision": "2025-12-26", "total": 3861550, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-13", "ejecutivo": "ANGEL"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2226, "fechaEmision": "2025-12-29", "total": 4974200, "saldo": 0, "obs": "STTOPER, VIBRIN, AFICHES - SAN JOSE", "vencimiento": "2026-01-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-27", "ejecutivo": ""}, {"rut": "77643297-0", "empresa": "NUTRISCO S.A.", "folio": 2227, "fechaEmision": "2025-12-29", "total": 998410, "saldo": 0, "obs": "VIBRIN, AFICHES, PENDONES - COOK GREEN", "vencimiento": "2026-01-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-27", "ejecutivo": ""}, {"rut": "77643297-0", "empresa": "NUTRISCO S.A.", "folio": 2228, "fechaEmision": "2025-12-29", "total": 3520377, "saldo": 0, "obs": "AFICHES, VIBRINES, STTOPER - FLIP", "vencimiento": "2026-01-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-27", "ejecutivo": ""}, {"rut": "65109088-1", "empresa": "LO BARNECHEA SERVICIOS", "folio": 2229, "fechaEmision": "2025-12-29", "total": 461423, "saldo": 0, "obs": "LIBROS TAPA DURA", "vencimiento": "2026-01-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2025-12-30", "ejecutivo": ""}, {"rut": "77049340-4", "empresa": "FERRERAS Y LICCI LIMITADA", "folio": 2231, "fechaEmision": "2025-12-29", "total": 2694160, "saldo": 0, "obs": "LIBROS", "vencimiento": "2025-12-31", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2025-12-29", "ejecutivo": ""}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2232, "fechaEmision": "2025-12-29", "total": 104720, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2026-01-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-28", "ejecutivo": ""}, {"rut": "76352020-K", "empresa": "INV. Y SERV. ODONTOLOGICOS CAIMI LTDA.", "folio": 2233, "fechaEmision": "2025-12-30", "total": 668099, "saldo": 0, "obs": "", "vencimiento": "2025-12-30", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-12-29", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2234, "fechaEmision": "2025-12-30", "total": 1175125, "saldo": 0, "obs": "", "vencimiento": "2026-01-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-27", "ejecutivo": ""}, {"rut": "70574900-0", "empresa": "FUNDACION INTEGRA", "folio": 2235, "fechaEmision": "2025-12-31", "total": 8889300, "saldo": 0, "obs": "", "vencimiento": "2026-01-11", "diasVencido": 11, "estado": "PAGADO", "fechaPago": "2026-01-29", "ejecutivo": ""}, {"rut": "73044000-6", "empresa": "FEDERACION CRIADORES DE CABALLOS RAZA CHILENA", "folio": 2237, "fechaEmision": "2026-01-06", "total": 7892080, "saldo": 0, "obs": "", "vencimiento": "2026-01-11", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2026-01-14", "ejecutivo": ""}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2238, "fechaEmision": "2026-01-07", "total": 4641, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2239, "fechaEmision": "2026-01-07", "total": 273658, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2240, "fechaEmision": "2026-01-07", "total": 535794, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2241, "fechaEmision": "2026-01-07", "total": 314485, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2242, "fechaEmision": "2026-01-07", "total": 452370, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2243, "fechaEmision": "2026-01-07", "total": 678556, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2244, "fechaEmision": "2026-01-07", "total": 90213, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2245, "fechaEmision": "2026-01-07", "total": 191200, "saldo": 0, "obs": "", "vencimiento": "2026-02-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-30", "ejecutivo": "BRIAN"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2246, "fechaEmision": "2026-01-08", "total": 1794520, "saldo": 0, "obs": "", "vencimiento": "2026-02-07", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-04", "ejecutivo": ""}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2247, "fechaEmision": "2026-01-09", "total": 357000, "saldo": 0, "obs": "", "vencimiento": "2026-01-14", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2026-01-16", "ejecutivo": ""}, {"rut": "60910000-1", "empresa": "UNIVERSIDAD DE CHILE", "folio": 2248, "fechaEmision": "2026-01-09", "total": 52000620, "saldo": 0, "obs": "", "vencimiento": "2026-02-08", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "BRIAN"}, {"rut": "76358849-1", "empresa": "CAROLINA VALVERDE LIMITADA", "folio": 2249, "fechaEmision": "2026-01-09", "total": 32800, "saldo": 0, "obs": "", "vencimiento": "2026-01-11", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-01-09", "ejecutivo": ""}, {"rut": "91215000-3", "empresa": "EDITORIAL UNIVERSITARIA S.A.", "folio": 2256, "fechaEmision": "2026-01-13", "total": 2499459, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-13", "ejecutivo": "JAIME"}, {"rut": "76089394-3", "empresa": "CALIGRAFIX SPA", "folio": 2257, "fechaEmision": "2026-01-13", "total": 749438, "saldo": 0, "obs": "MANUALES ANILLADOS", "vencimiento": "2026-02-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-05", "ejecutivo": ""}, {"rut": "76358849-1", "empresa": "CAROLINA VALVERDE LIMITADA", "folio": 2258, "fechaEmision": "2026-01-13", "total": 12280, "saldo": 0, "obs": "", "vencimiento": "2026-01-13", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-01-13", "ejecutivo": ""}, {"rut": "77758875-3", "empresa": "EDITORIAL CAMPUS TRIBUTARIO LIMITADA", "folio": 2259, "fechaEmision": "2026-01-13", "total": 8312150, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-18", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2026-01-20", "ejecutivo": ""}, {"rut": "76989028-9", "empresa": "SANULAC NUTRICION CHILE SPA", "folio": 2260, "fechaEmision": "2026-01-13", "total": 54740, "saldo": 0, "obs": "PENDON", "vencimiento": "2026-02-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-31", "ejecutivo": "LEONARDO"}, {"rut": "76358849-1", "empresa": "CAROLINA VALVERDE LIMITADA", "folio": 2262, "fechaEmision": "2026-01-14", "total": 6560, "saldo": 0, "obs": "PLOTEOS", "vencimiento": "2026-01-16", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-01-15", "ejecutivo": ""}, {"rut": "76358849-1", "empresa": "CAROLINA VALVERDE LIMITADA", "folio": 2263, "fechaEmision": "2026-01-14", "total": 6807, "saldo": 0, "obs": "PLOTEOS", "vencimiento": "2026-01-16", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "", "ejecutivo": ""}, {"rut": "79975650-1", "empresa": "CORPORACION NACIONAL DE CAPACITACION", "folio": 2264, "fechaEmision": "2026-01-15", "total": 2256954, "saldo": 0, "obs": "LIBROS  23-12-25 SCOTIABANK $1.128.477.-//14-01-26 SCOTIABANK $1.128.477.-", "vencimiento": "2026-01-15", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-01-15", "ejecutivo": ""}, {"rut": "77773113-0", "empresa": "HUX CONSULTORES LIMITADA", "folio": 2265, "fechaEmision": "2026-01-15", "total": 102816, "saldo": 0, "obs": "PLOTEOS", "vencimiento": "2026-01-17", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-01-15", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2266, "fechaEmision": "2026-01-15", "total": 2571818, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-14", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-10", "ejecutivo": "BRIAN"}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2268, "fechaEmision": "2026-01-16", "total": 947240, "saldo": 0, "obs": "AFICHES, BUZONES, CUPONES", "vencimiento": "2026-02-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-29", "ejecutivo": ""}, {"rut": "77471270-4", "empresa": "AGROCOMERCIAL CODIGUA SPA", "folio": 2270, "fechaEmision": "2026-01-19", "total": 1547000, "saldo": 0, "obs": "CALENDARIO", "vencimiento": "2026-02-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-04", "ejecutivo": ""}, {"rut": "77471270-4", "empresa": "AGROCOMERCIAL CODIGUA SPA", "folio": 2271, "fechaEmision": "2026-01-19", "total": 773500, "saldo": 0, "obs": "CALENDARIOS", "vencimiento": "2026-02-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-04", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2272, "fechaEmision": "2026-01-21", "total": 7564830, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-20", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-13", "ejecutivo": "ANGEL"}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2273, "fechaEmision": "2026-01-21", "total": 8726270, "saldo": 0, "obs": "LIBROS, CAJAS", "vencimiento": "2026-02-20", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-13", "ejecutivo": "ANGEL"}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2274, "fechaEmision": "2026-01-21", "total": 7735, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2026-02-20", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-20", "ejecutivo": ""}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2275, "fechaEmision": "2026-01-21", "total": 228049, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-20", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-20", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2276, "fechaEmision": "2026-01-23", "total": 273683, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-22", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-20", "ejecutivo": "BRIAN"}, {"rut": "76349397-0", "empresa": "FEBOND SPA", "folio": 2277, "fechaEmision": "2026-01-23", "total": 627179, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-02-22", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-20", "ejecutivo": "BRIAN"}, {"rut": "96508660-9", "empresa": "FARET SPA", "folio": 2281, "fechaEmision": "2026-01-23", "total": 743750, "saldo": 0, "obs": "", "vencimiento": "2026-02-22", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-26", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2282, "fechaEmision": "2026-01-26", "total": 5664400, "saldo": 0, "obs": "AFICHES", "vencimiento": "2026-02-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-01-29", "ejecutivo": ""}, {"rut": "7970939-5", "empresa": "MARIO ENRIQUE GONZALEZ ESPINOSA", "folio": 2283, "fechaEmision": "2026-01-27", "total": 793730, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-01-29", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-01-29", "ejecutivo": ""}, {"rut": "60910000-1", "empresa": "UNIVERSIDAD DE CHILE", "folio": 2284, "fechaEmision": "2026-01-27", "total": 1241765, "saldo": 0, "obs": "FOLLETOS", "vencimiento": "2026-02-26", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-20", "ejecutivo": "ANGEL"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2285, "fechaEmision": "2026-01-29", "total": 196112, "saldo": 0, "obs": "EXHIBIDOR ACRILICO", "vencimiento": "2026-02-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-10", "ejecutivo": "LEONARDO"}, {"rut": "72754700-2", "empresa": "FUNDACION INSTITUTO PROFESIONAL DUOC UC", "folio": 2286, "fechaEmision": "2026-01-29", "total": 117484612, "saldo": 0, "obs": "KIT: CUADERNO, MORRAL, LAPIZ", "vencimiento": "2026-02-28", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": ""}, {"rut": "76078941-0", "empresa": "ASESORIAS E INVERSIONES SAN CHARBEL SPA", "folio": 2292, "fechaEmision": "2026-02-02", "total": 241273, "saldo": 0, "obs": "MANUALES", "vencimiento": "2026-03-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-02", "ejecutivo": ""}, {"rut": "77643297-0", "empresa": "NUTRISCO S.A.", "folio": 2293, "fechaEmision": "2026-02-02", "total": 547400, "saldo": 0, "obs": "DISTRIBUCION", "vencimiento": "2026-03-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-04", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2294, "fechaEmision": "2026-02-02", "total": 3398640, "saldo": 0, "obs": "AFICHES", "vencimiento": "2026-03-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-06", "ejecutivo": ""}, {"rut": "60911000-7", "empresa": "UNIVERSIDAD DE SANTIAGO DE CHILE", "folio": 2295, "fechaEmision": "2026-02-02", "total": 3585708, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-04", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-12", "ejecutivo": "BRIAN"}, {"rut": "99526160-K", "empresa": "BUREAU VERITAS CERTIFICATION CHILE S.A", "folio": 2302, "fechaEmision": "2026-02-04", "total": 8509, "saldo": 0, "obs": "DIPLOMAS // CLIENTE RETIRA", "vencimiento": "2026-03-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-23", "ejecutivo": "ORLANDO"}, {"rut": "87912900-1", "empresa": "UNIVERSIDAD DE LA FRONTERA", "folio": 2303, "fechaEmision": "2026-02-04", "total": 999957, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-06", "ejecutivo": "BRIAN"}, {"rut": "69500900-3", "empresa": "PROGRAMA DE LAS NACIONES UNIDAS PARA EL DESARROLLO PNUD", "folio": 2304, "fechaEmision": "2026-02-04", "total": 4232235, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-06", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-12", "ejecutivo": ""}, {"rut": "96832590-6", "empresa": "EDICIONES UNIVERSIT DE VALPSO DE LA UNIVERSIDAD CATOLICA DE VALPO S.A", "folio": 2305, "fechaEmision": "2026-02-06", "total": 3562860, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-08", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-13", "ejecutivo": "ANGEL"}, {"rut": "60601000-1", "empresa": "SUBSECRETARIA DE RELACIONES EXTERIORES", "folio": 2306, "fechaEmision": "2026-02-09", "total": 6875820, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-13", "ejecutivo": "BRIAN"}, {"rut": "77516120-5", "empresa": "COMUNICACION IMAGEN Y APOYO EMPRESARIAL LTDA.", "folio": 2307, "fechaEmision": "2026-02-09", "total": 1071000, "saldo": 0, "obs": "CUADERNOS TAPA DURA", "vencimiento": "2026-02-14", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": "LEONARDO"}, {"rut": "7970939-5", "empresa": "MARIO ENRIQUE GONZALEZ ESPINOSA", "folio": 2308, "fechaEmision": "2026-02-09", "total": 2130933, "saldo": 0, "obs": "AGENDA TAPA DURA", "vencimiento": "2026-02-11", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-03-02", "ejecutivo": ""}, {"rut": "77822502-6", "empresa": "EDICIONES CONTRERAS Y ESCANDON LIMITADA", "folio": 2311, "fechaEmision": "2026-02-13", "total": 3233885, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-18", "ejecutivo": "ORLANDO"}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2312, "fechaEmision": "2026-02-13", "total": 1082900, "saldo": 0, "obs": "FLEJERAS - IMPRESIONES", "vencimiento": "2026-02-18", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "", "ejecutivo": ""}, {"rut": "77822502-6", "empresa": "EDICIONES CONTRERAS Y ESCANDON LIMITADA", "folio": 2313, "fechaEmision": "2026-02-16", "total": 5233977, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-18", "ejecutivo": "ORLANDO"}, {"rut": "65233607-8", "empresa": "CORPORACION CENTRO DE INFORMACION PALESTINA", "folio": 2314, "fechaEmision": "2026-02-16", "total": 583100, "saldo": 0, "obs": "DISEÑO", "vencimiento": "2026-02-16", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2025-07-31", "ejecutivo": ""}, {"rut": "80186300-0", "empresa": "CIAL ALIMENTOS S.A.", "folio": 2315, "fechaEmision": "2026-02-16", "total": 999600, "saldo": 0, "obs": "STICKERS", "vencimiento": "2026-03-18", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-02-17", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2319, "fechaEmision": "2026-02-20", "total": 315350, "saldo": 0, "obs": "VIBRINES", "vencimiento": "2026-03-22", "diasVencido": 61, "estado": "PAGADO", "fechaPago": "2026-04-21", "ejecutivo": "LEONARDO"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2320, "fechaEmision": "2026-02-20", "total": 577150, "saldo": 0, "obs": "CATALOGOS", "vencimiento": "2026-03-22", "diasVencido": 61, "estado": "PAGADO", "fechaPago": "2026-04-21", "ejecutivo": "LEONARDO"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2321, "fechaEmision": "2026-02-20", "total": 589050, "saldo": 0, "obs": "PORTA PRECIOS", "vencimiento": "2026-03-22", "diasVencido": 61, "estado": "PAGADO", "fechaPago": "2026-04-21", "ejecutivo": "LEONARDO"}, {"rut": "61608604-9", "empresa": "SERV.SALUD METROP.CENTRAL HOSP.CLINICO SAN BORJA ARRIARAN", "folio": 2322, "fechaEmision": "2026-02-24", "total": 230032, "saldo": 0, "obs": "AFICHES", "vencimiento": "2026-03-26", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-21", "ejecutivo": "ORLANDO"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2328, "fechaEmision": "2026-02-25", "total": 114240, "saldo": 0, "obs": "TARJETAS", "vencimiento": "2026-03-27", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-24", "ejecutivo": "LEO"}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2329, "fechaEmision": "2026-02-27", "total": 2261000, "saldo": 0, "obs": "OT03 HOJAS DE RESPUESTAS", "vencimiento": "2026-03-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-14", "ejecutivo": "JAIME"}, {"rut": "77050426-0", "empresa": "ALIANZA PEDRO DE VALDIVIA LTDA.", "folio": 2330, "fechaEmision": "2026-02-27", "total": 1130500, "saldo": 0, "obs": "OT03 HOJAS DE RESPUESTAS", "vencimiento": "2026-03-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-02", "ejecutivo": "JAIME"}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2331, "fechaEmision": "2026-02-27", "total": 3569119, "saldo": 0, "obs": "OT04 FOLLETOS", "vencimiento": "2026-03-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-02", "ejecutivo": "JAIME"}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2332, "fechaEmision": "2026-02-27", "total": 4368966, "saldo": 0, "obs": "OT01 FOLLETOS", "vencimiento": "2026-03-29", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-02", "ejecutivo": "JAIME"}, {"rut": "85698200-9", "empresa": "PREUNIVERSITARIO PEDRO DE VALDIVIA LTDA.", "folio": 2333, "fechaEmision": "2026-03-02", "total": 5440680, "saldo": 0, "obs": "OT02 FOLLETOS Y HOJAS DE RESPUESTA", "vencimiento": "2026-04-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-14", "ejecutivo": "JAIME"}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2338, "fechaEmision": "2026-03-02", "total": 39270, "saldo": 0, "obs": "IMPRESIONES", "vencimiento": "2026-04-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-31", "ejecutivo": "LEONARDO"}, {"rut": "81698900-0", "empresa": "PONTIFICIA UNIVERSIDAD CATOLICA DE CHILE", "folio": 2339, "fechaEmision": "2026-03-02", "total": 149940, "saldo": 0, "obs": "DIPLOMAS", "vencimiento": "2026-04-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-01", "ejecutivo": "ANGEL"}, {"rut": "77175160-1", "empresa": "COMERCIAL DICALLA S A", "folio": 2340, "fechaEmision": "2026-03-02", "total": 1644104, "saldo": 0, "obs": "PARANTES", "vencimiento": "2026-04-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-13", "ejecutivo": "LEONARDO"}, {"rut": "60201000-7", "empresa": "SENADO DE LA REPUBLICA", "folio": 2344, "fechaEmision": "2026-03-02", "total": 1420384, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-01", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-08", "ejecutivo": "BRIAN"}, {"rut": "65147265-3", "empresa": "CORPORACION EDUCACIONAL MIRADOR AZUL", "folio": 0, "fechaEmision": "2026-03-06", "total": 500752, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-09", "diasVencido": 3, "estado": "PAGADO", "fechaPago": "2026-03-06", "ejecutivo": ""}, {"rut": "60203000-8", "empresa": "BIBLIOTECA DEL CONGRESO NACIONAL", "folio": 2351, "fechaEmision": "2026-03-06", "total": 456960, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-05", "diasVencido": 47, "estado": "PAGADO", "fechaPago": "2026-04-21", "ejecutivo": ""}, {"rut": "65147265-2", "empresa": "CORPORACION EDUCACIONAL MIRADOR AZUL", "folio": 2352, "fechaEmision": "2026-03-06", "total": 420799, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-08", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-03-09", "ejecutivo": ""}, {"rut": "77471270-4", "empresa": "AGROCOMERCIAL CODIGUA SPA", "folio": 2354, "fechaEmision": "2026-03-09", "total": 3365558, "saldo": 0, "obs": "", "vencimiento": "2026-04-08", "diasVencido": 44, "estado": "PAGADO", "fechaPago": "2026-04-22", "ejecutivo": ""}, {"rut": "65233607-8", "empresa": "CORPORACION CENTRO DE INFORMACION PALESTINA", "folio": 2355, "fechaEmision": "2026-03-10", "total": 2905980, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-12", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-03-13", "ejecutivo": ""}, {"rut": "77822502-6", "empresa": "EDICIONES CONTRERAS Y ESCANDON LIMITADA", "folio": 2356, "fechaEmision": "2026-03-10", "total": 1624350, "saldo": 0, "obs": "LIBROS TAPA DURA", "vencimiento": "2026-04-09", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-20", "ejecutivo": ""}, {"rut": "77049340-4", "empresa": "FERRERAS Y LICCI LIMITADA", "folio": 2357, "fechaEmision": "2026-03-10", "total": 2007530, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-12", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-03-10", "ejecutivo": ""}, {"rut": "77175160-1", "empresa": "COMERCIAL DICALLA S A", "folio": 2358, "fechaEmision": "2026-03-11", "total": 1494640, "saldo": 0, "obs": "PARANTES", "vencimiento": "2026-04-10", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-13", "ejecutivo": ""}, {"rut": "76601833-5", "empresa": "GRAFICOMEX SPA", "folio": 2359, "fechaEmision": "2026-03-11", "total": 856800, "saldo": 0, "obs": "LAMINAS", "vencimiento": "2026-03-16", "diasVencido": 5, "estado": "PAGADO", "fechaPago": "", "ejecutivo": ""}, {"rut": "77643296-2", "empresa": "NUTRISCO CHILE S.A", "folio": 2370, "fechaEmision": "2026-03-12", "total": 659736, "saldo": 0, "obs": "EXHIBIDOR ACRILICO", "vencimiento": "2026-04-11", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-07", "ejecutivo": ""}, {"rut": "76005909-9", "empresa": "COMERCIAL MOTORES DE LOS ANDES SPA", "folio": 2371, "fechaEmision": "2026-03-13", "total": 1898050, "saldo": 0, "obs": "POLIZAS", "vencimiento": "2026-04-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-10", "ejecutivo": ""}, {"rut": "70574900-0", "empresa": "FUNDACION INTEGRA", "folio": 2372, "fechaEmision": "2026-03-13", "total": 1764181, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-12", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-27", "ejecutivo": ""}, {"rut": "61307000-1", "empresa": "INSTITUTO DE DESARROLLO AGROPECUARIO  - INDAP", "folio": 2373, "fechaEmision": "2026-03-16", "total": 822647, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-15", "ejecutivo": ""}, {"rut": "76051644-9", "empresa": "INGENIERIA DE SISTEMAS OPEN GREEN ROAD S.A.", "folio": 2374, "fechaEmision": "2026-03-16", "total": 10060536, "saldo": 0, "obs": "LIBROS - EXCEDENTES - INTERESES", "vencimiento": "2026-04-15", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-09", "ejecutivo": ""}, {"rut": "69255600-3", "empresa": "MUNICIPALIDAD DE VITACURA", "folio": 2376, "fechaEmision": "2026-03-17", "total": 867510, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-16", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-13", "ejecutivo": ""}, {"rut": "76078941-0", "empresa": "ASESORIAS E INVERSIONES SAN CHARBEL SPA", "folio": 2404, "fechaEmision": "2026-03-24", "total": 79682, "saldo": 0, "obs": "MANUALES", "vencimiento": "2026-04-23", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-26", "ejecutivo": ""}, {"rut": "76078941-0", "empresa": "ASESORIAS E INVERSIONES SAN CHARBEL SPA", "folio": 2405, "fechaEmision": "2026-03-24", "total": 241273, "saldo": 0, "obs": "MANUALES", "vencimiento": "2026-04-23", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-03-26", "ejecutivo": ""}, {"rut": "73044000-6", "empresa": "FEDERACION CRIADORES DE CABALLOS RAZA CHILENA", "folio": 2406, "fechaEmision": "2026-03-26", "total": 8639400, "saldo": 0, "obs": "", "vencimiento": "2026-04-15", "diasVencido": 20, "estado": "PAGADO", "fechaPago": "2026-04-15", "ejecutivo": "ANGEL OLGUIN"}, {"rut": "65233607-8", "empresa": "CORPORACION CENTRO DE INFORMACION PALESTINA", "folio": 2407, "fechaEmision": "2026-03-26", "total": 2905980, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-03-28", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-04-06", "ejecutivo": "BRIAN"}, {"rut": "65233607-8", "empresa": "CORPORACION CENTRO DE INFORMACION PALESTINA", "folio": 2408, "fechaEmision": "2026-03-26", "total": 534072, "saldo": 0, "obs": "REVISTA_x000D_", "vencimiento": "2026-03-28", "diasVencido": 2, "estado": "PAGADO", "fechaPago": "2026-04-06", "ejecutivo": "BRIAN"}, {"rut": "70819400-K", "empresa": "TRIBUNAL CONSTITUCIONAL", "folio": 2409, "fechaEmision": "2026-03-26", "total": 801822, "saldo": 0, "obs": "LIBROS", "vencimiento": "2026-04-25", "diasVencido": 30, "estado": "PAGADO", "fechaPago": "2026-04-06", "ejecutivo": ""}, {"rut": "76954734-7", "empresa": "CARDINAL SERVICIOS INTEGRALES SPA", "folio": 2415, "fechaEmision": "2026-04-06", "total": 416500, "saldo": 0, "obs": "DIPTICOS - TARJETAS", "vencimiento": "2026-05-06", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-17", "ejecutivo": ""}, {"rut": "79975650-1", "empresa": "CORPORACION NACIONAL DE CAPACITACION", "folio": 2423, "fechaEmision": "2026-04-09", "total": 1736924, "saldo": 0, "obs": "MANUALES", "vencimiento": "2026-04-09", "diasVencido": 0, "estado": "PAGADO", "fechaPago": "2026-04-17", "ejecutivo": ""}];
 
 let CREDITOS_REALES = [{"id": "scotia_fogape", "prestamo": "FOGAPE Cuota Fija", "banco": "Scotiabank", "empresa": "GMD", "numero": "7-1016-20555-74", "tipo": "Cr\u00e9dito", "moneda": "CLP", "tasa": 0.7025, "montoInicial": 100000000, "deudaVigente": 83919800, "cuotasTotales": 12, "cuotasPagadas": 2, "proximaCuota": 8758158, "fechaProximaCuota": "2026-05-13", "fechaVencimientoFinal": "2027-02-15", "cuotas": [{"numero": "003", "vencimiento": "2026-05-13", "capital": 8135721, "interes": 589956, "valorCuota": 8758158, "estado": "Pendiente"}, {"numero": "004", "vencimiento": "2026-06-15", "capital": 8139639, "interes": 586038, "valorCuota": 8760411, "estado": "Pendiente"}, {"numero": "005", "vencimiento": "2026-07-13", "capital": 8281839, "interes": 443838, "valorCuota": 8751983, "estado": "Pendiente"}, {"numero": "006", "vencimiento": "2026-08-13", "capital": 8294447, "interes": 431230, "valorCuota": 8751236, "estado": "Pendiente"}, {"numero": "007", "vencimiento": "2026-09-14", "capital": 8342734, "interes": 382943, "valorCuota": 8748374, "estado": "Pendiente"}, {"numero": "008", "vencimiento": "2026-10-13", "capital": 8435329, "interes": 290348, "valorCuota": 8742886, "estado": "Pendiente"}, {"numero": "009", "vencimiento": "2026-11-13", "capital": 8476582, "interes": 249095, "valorCuota": 8740441, "estado": "Pendiente"}, {"numero": "010", "vencimiento": "2026-12-14", "capital": 8538159, "interes": 187518, "valorCuota": 8736791, "estado": "Pendiente"}, {"numero": "011", "vencimiento": "2027-01-13", "capital": 8604231, "interes": 121446, "valorCuota": 8732875, "estado": "Pendiente"}, {"numero": "012", "vencimiento": "2027-02-15", "capital": 8671119, "interes": 67054, "valorCuota": 8742147, "estado": "Pendiente"}]}, {"id": "sant_fogape_ki", "prestamo": "FOGAPE K+I Comisi\u00f3n", "banco": "SANTANDER", "empresa": "GMD", "numero": "4-200-5148758-2", "tipo": "Cr\u00e9dito", "moneda": "CLP", "tasa": 0.68, "montoInicial": 174000000, "deudaVigente": 174000000, "cuotasTotales": 60, "cuotasPagadas": 0, "proximaCuota": 3655204, "fechaProximaCuota": "2026-05-04", "fechaVencimientoFinal": "2031-04-02", "cuotas": [{"numero": "001", "vencimiento": "2026-05-04", "capital": null, "interes": null, "valorCuota": 3655204, "estado": "Pendiente"}]}, {"id": "sant_fogain_1", "prestamo": "FOGAIN Cuotas Iguales #1", "banco": "SANTANDER", "empresa": "GMD", "numero": "4-200-5147433-2", "tipo": "Cr\u00e9dito", "moneda": "CLP", "tasa": 0.68, "montoInicial": 324000000, "deudaVigente": 318870198, "cuotasTotales": 60, "cuotasPagadas": 1, "proximaCuota": 6598602, "fechaProximaCuota": "2026-05-07", "fechaVencimientoFinal": "2031-03-07", "cuotas": [{"numero": "002", "vencimiento": "2026-05-07", "capital": null, "interes": null, "valorCuota": 6598602, "estado": "Pendiente"}]}, {"id": "sant_fogain_2", "prestamo": "FOGAIN Cuotas Iguales #2", "banco": "SANTANDER", "empresa": "GMD", "numero": "4-200-5150373-1", "tipo": "Cr\u00e9dito", "moneda": "CLP", "tasa": 0.68, "montoInicial": 151600000, "deudaVigente": 151600000, "cuotasTotales": 60, "cuotasPagadas": 0, "proximaCuota": 3097558, "fechaProximaCuota": "2026-05-04", "fechaVencimientoFinal": "2031-04-04", "cuotas": [{"numero": "001", "vencimiento": "2026-05-04", "capital": null, "interes": null, "valorCuota": 3097558, "estado": "Pendiente"}]}, {"id": "bcchile_grafhika", "prestamo": "Grafhika Impresores", "banco": "Grafhika BancoChile", "empresa": "Grafhika", "numero": "164779259919073267", "tipo": "Cr\u00e9dito", "moneda": "CLP", "tasa": null, "montoInicial": 15000000, "deudaVigente": 13772530, "cuotasTotales": 12, "cuotasPagadas": 2, "proximaCuota": 1377253, "fechaProximaCuota": "2026-05-05", "fechaVencimientoFinal": "2027-02-05", "cuotas": [{"numero": "03", "vencimiento": "2026-05-05", "capital": 1223035, "interes": 154218, "valorCuota": 1377253, "estado": "Vigente"}, {"numero": "04", "vencimiento": "2026-06-05", "capital": 1228071, "interes": 149182, "valorCuota": 1377253, "estado": "Vigente"}, {"numero": "05", "vencimiento": "2026-07-06", "capital": 1243806, "interes": 133447, "valorCuota": 1377253, "estado": "Vigente"}]}];
@@ -662,7 +668,6 @@ function DonutChart({segments,size=100}) {
 const IC = ({n,s=18}) => {
   const m={
     sim:<><circle cx="4" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="20" cy="5" r="2"/><line x1="4" y1="9" x2="4" y2="20"/><line x1="12" y1="9" x2="12" y2="20"/><line x1="20" y1="9" x2="20" y2="20"/></>,
-    ia:<><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6a6 6 0 0 0-6 6c0 3.31 2.69 6 6 6s6-2.69 6-6a6 6 0 0 0-6-6z"/></>,
     mov:<><path d="M3 17L8 10 13 13 21 5"/><polyline points="17 5 21 5 21 9"/></>,
     gas:<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></>,
     ven:<><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
@@ -677,6 +682,7 @@ const IC = ({n,s=18}) => {
     ref:<path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>,
     not:<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></>,
     fin:<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    iva:<><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></>,
     cld:<><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></>,
     usr:<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
   };
@@ -3517,6 +3523,330 @@ function UploadVentasPanel({ onImport, onClose }) {
   );
 }
 
+// ── Cuadre de IVA (SII) ───────────────────────────────────────────────────
+function CuadreIvaPage() {
+  const [tab, setTab] = useState('porventa');
+  const [empresaFiltro, setEmpresaFiltro] = useState('todas');
+  const MESES_IVA = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const pLabel = p => (p && p.length === 6) ? `${MESES_IVA[+p.slice(4,6)]} ${p.slice(0,4)}` : (p || '');
+
+  if (!CUADRE_IVA_DATA.length) {
+    return (
+      <div className="page">
+        <div className="card" style={{textAlign:'center',padding:'48px 20px',color:'var(--t3)'}}>
+          <div style={{marginBottom:8,fontWeight:600,color:'var(--text)'}}>Sin datos de IVA todavía</div>
+          <div style={{fontSize:12.5}}>Corré <code style={{background:'var(--bg)',padding:'2px 6px',borderRadius:4,fontFamily:"'DM Mono',monospace"}}>ingest.py --resumenes</code> en sii-dashboard para publicarlos.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const empresas = [...new Set(CUADRE_IVA_DATA.map(r => r.empresa))].sort();
+  const cuadreFiltrado = CUADRE_IVA_DATA
+    .filter(r => empresaFiltro === 'todas' || r.empresa === empresaFiltro)
+    .sort((a,b) => (a.empresa+a.periodo).localeCompare(b.empresa+b.periodo));
+  const resFiltrado = RESUMENES_SII_DATA.filter(r => empresaFiltro === 'todas' || r.empresa === empresaFiltro);
+
+  const totDeb = cuadreFiltrado.reduce((s,r)=>s+r.ivaDebito,0);
+  const totCre = cuadreFiltrado.reduce((s,r)=>s+r.ivaCredito,0);
+  const totDet = cuadreFiltrado.reduce((s,r)=>s+r.ivaDeterminado,0);
+  const totDocsV = cuadreFiltrado.reduce((s,r)=>s+r.docsVenta,0);
+  const totDocsC = cuadreFiltrado.reduce((s,r)=>s+r.docsCompra,0);
+  const totPendIva = cuadreFiltrado.reduce((s,r)=>s+r.ivaPendiente,0);
+
+  // ── IVA del mes en curso: lo que se declara y paga en el F29 siguiente ──
+  const hoy = new Date();
+  const periodoHoy = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  const periodosDisponibles = [...new Set(CUADRE_IVA_DATA.map(r=>r.periodo))].sort();
+  const periodoVigente = periodosDisponibles.includes(periodoHoy) ? periodoHoy : periodosDisponibles[periodosDisponibles.length-1];
+  const esMesEnCurso = periodoVigente === periodoHoy;
+  const filasMesVigente = CUADRE_IVA_DATA
+    .filter(r => r.periodo===periodoVigente && (empresaFiltro==='todas' || r.empresa===empresaFiltro))
+    .sort((a,b)=>a.empresa.localeCompare(b.empresa));
+  const totalDetVigente = filasMesVigente.reduce((s,r)=>s+r.ivaDeterminado,0);
+  // Vencimiento estimado: día 20 del mes siguiente (declaración y pago electrónico).
+  // El día 12 aplica sin pago electrónico; feriados y el tipo de contribuyente pueden correrlo — verificar en sii.cl.
+  const anioPeriodoVig = +periodoVigente.slice(0,4), mesPeriodoVig = +periodoVigente.slice(4,6);
+  const vencEstimado = new Date(anioPeriodoVig, mesPeriodoVig, 20);
+  const diaSemanaVenc = vencEstimado.getDay();
+  if (diaSemanaVenc===6) vencEstimado.setDate(vencEstimado.getDate()+2);
+  else if (diaSemanaVenc===0) vencEstimado.setDate(vencEstimado.getDate()+1);
+  const vencTexto = vencEstimado.toLocaleDateString('es-CL',{day:'numeric',month:'long',year:'numeric'});
+  const mesDeclaraLabel = vencEstimado.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
+
+  const grupos = {};
+  resFiltrado.forEach(r => {
+    const k = r.empresa+'|'+r.periodo+'|'+r.operacion;
+    (grupos[k] = grupos[k] || []).push(r);
+  });
+  const groupKeys = Object.keys(grupos).sort((a,b) => {
+    const [ea,pa,oa] = a.split('|'), [eb,pb,ob] = b.split('|');
+    if (ea !== eb) return ea.localeCompare(eb);
+    if (pa !== pb) return pa.localeCompare(pb);
+    return oa === 'VENTA' ? -1 : 1;
+  });
+
+  return (
+    <div className="page">
+
+      {filasMesVigente.length > 0 && (
+        <div className="card" style={{marginBottom:14,border:'1px solid var(--amber)',background:'var(--amber-bg)'}}>
+          <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:14}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:38,height:38,minWidth:38,borderRadius:10,background:'#fff',display:'flex',alignItems:'center',justifyContent:'center',color:'oklch(50% .17 75)'}}>
+                <IC n="not" s={18}/>
+              </div>
+              <div>
+                <div style={{fontSize:14,fontWeight:700}}>IVA de {pLabel(periodoVigente)}{esMesEnCurso ? ' — mes en curso' : ''}</div>
+                <div style={{fontSize:12,color:'var(--t2)'}}>Se declara y paga en el F29 de {mesDeclaraLabel} · vencimiento estimado {vencTexto}</div>
+              </div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--t2)'}}>
+                {totalDetVigente<0 ? 'Remanente a favor (grupo)' : 'Total a pagar (grupo)'}
+              </div>
+              <div style={{fontSize:30,fontWeight:700,lineHeight:1,color: totalDetVigente<0 ? 'var(--g600)' : 'oklch(45% .17 75)'}}>
+                {fmt(Math.abs(totalDetVigente))}
+              </div>
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:`repeat(${filasMesVigente.length},1fr)`,gap:10}}>
+            {filasMesVigente.map(r => (
+              <div key={r.empresa} style={{background:'#fff',borderRadius:9,padding:'10px 14px',border:'1px solid var(--border)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                  <div style={{fontSize:12.5,fontWeight:600}}>{r.empresa}</div>
+                  <span className={`pill ${r.resultado==='A pagar'?'a':'g'}`}>{r.resultado}</span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--t2)'}}>
+                  <span>Débito {fmt(r.ivaDebito)}</span><span>Crédito {fmt(r.ivaCredito)}</span>
+                </div>
+                <div className="mono" style={{fontSize:18,fontWeight:700,marginTop:4,color:r.ivaDeterminado<0?'var(--g600)':'oklch(45% .17 75)'}}>
+                  {fmt(Math.abs(r.ivaDeterminado))}
+                </div>
+                {r.docsPendientes>0 && (
+                  <div style={{fontSize:10.5,color:'var(--red)',marginTop:4}}>
+                    ⚠ {r.docsPendientes} doc. pendiente(s) · {fmt(r.ivaPendiente)} de IVA sin incluir
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {esMesEnCurso && (
+            <div style={{marginTop:12,fontSize:11.5,color:'var(--t2)',background:'rgba(255,255,255,.65)',borderRadius:7,padding:'8px 12px'}}>
+              ⚠ {pLabel(periodoVigente)} sigue en curso: este monto es provisorio y va a seguir cambiando a medida que se
+              emitan más facturas y lleguen más compras hasta el cierre del mes. No es la cifra final del F29 — actualizá
+              corriendo <code style={{background:'var(--bg)',padding:'1px 5px',borderRadius:4}}>ingest.py --resumenes</code> más
+              cerca de fin de mes.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="kpi-grid" style={{marginBottom:14}}>
+        <div className="kcard">
+          <div className="kcard-icon g"><IC n="iva" s={15}/></div>
+          <div className="kcard-label">IVA Débito</div>
+          <div className="kcard-val">{fmt(totDeb)}</div>
+          <div className="kcard-change neu"><span className="sub">{totDocsV} docs. de venta</span></div>
+        </div>
+        <div className="kcard">
+          <div className="kcard-icon g"><IC n="iva" s={15}/></div>
+          <div className="kcard-label">IVA Crédito</div>
+          <div className="kcard-val">{fmt(totCre)}</div>
+          <div className="kcard-change neu"><span className="sub">{totDocsC} docs. de compra</span></div>
+        </div>
+        <div className="kcard" style={{borderColor: totDet<0 ? 'var(--g400)' : 'var(--amber)'}}>
+          <div className={`kcard-icon ${totDet<0?'g':'a'}`}><IC n="iva" s={15}/></div>
+          <div className="kcard-label">IVA Determinado</div>
+          <div className="kcard-val" style={{color: totDet<0?'var(--g600)':'oklch(50% .17 75)'}}>{fmt(Math.abs(totDet))}</div>
+          <div className="kcard-change neu"><span className="sub">{totDet<0?'Remanente a favor':'A pagar'}</span></div>
+        </div>
+        <div className="kcard">
+          <div className="kcard-icon b"><IC n="cre" s={15}/></div>
+          <div className="kcard-label">Empresas · Períodos</div>
+          <div className="kcard-val">{empresas.length} · {new Set(cuadreFiltrado.map(r=>r.periodo)).size}</div>
+          <div className="kcard-change neu"><span className="sub">{totPendIva>0 ? `${fmt(totPendIva)} IVA pendiente` : 'sin documentos pendientes'}</span></div>
+        </div>
+      </div>
+
+      <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:14}}>
+        <div className="tabs" style={{marginBottom:0}}>
+          <button className={`tab ${tab==='porventa'?'act':''}`} onClick={()=>setTab('porventa')}>IVA por Venta</button>
+          <button className={`tab ${tab==='cuadre'?'act':''}`} onClick={()=>setTab('cuadre')}>Cuadre IVA</button>
+          <button className={`tab ${tab==='resumenes'?'act':''}`} onClick={()=>setTab('resumenes')}>Resúmenes SII</button>
+        </div>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontSize:12,color:'var(--t3)'}}>Empresa</span>
+          {['todas',...empresas].map(e => (
+            <button key={e} onClick={()=>setEmpresaFiltro(e)} style={{
+              fontSize:12.5,padding:'5px 12px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',
+              border:`1px solid ${empresaFiltro===e?'var(--g600)':'var(--border)'}`,
+              background:empresaFiltro===e?'var(--g600)':'var(--surface)',
+              color:empresaFiltro===e?'#fff':'var(--t2)',
+            }}>{e==='todas'?'Todas':e}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab==='porventa' && (
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          {(empresaFiltro==='todas' ? empresas : [empresaFiltro]).map(emp => {
+            const filas = CUADRE_IVA_DATA.filter(r=>r.empresa===emp).sort((a,b)=>a.periodo.localeCompare(b.periodo));
+            if (!filas.length) return null;
+            const totDebitoEmp = filas.reduce((s,r)=>s+r.ivaDebito,0);
+            const totNetoEmp = filas.reduce((s,r)=>s+r.ventasNetas,0);
+            const totVentaTotalEmp = filas.reduce((s,r)=>s+r.ventasTotal,0);
+            const totDocsEmp = filas.reduce((s,r)=>s+r.docsVenta,0);
+            return (
+              <div className="card" key={emp}>
+                <div className="card-hd" style={{alignItems:'center'}}>
+                  <div>
+                    <div className="card-title">{emp}</div>
+                    <div className="card-sub">IVA débito generado por ventas · {pLabel(filas[0].periodo)} – {pLabel(filas[filas.length-1].periodo)} · {totDocsEmp} documentos</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--t3)',marginBottom:2}}>IVA débito del período</div>
+                    <div style={{fontSize:26,fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(totDebitoEmp)}</div>
+                  </div>
+                </div>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Período</th><th className="r">Ventas Netas</th><th className="r">Ventas Exentas</th>
+                      <th className="r">Ventas Total</th><th className="r">IVA Débito</th><th className="r">Docs.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((r,i) => (
+                      <tr key={i}>
+                        <td>{pLabel(r.periodo)}</td>
+                        <td className="r mono">{fmt(r.ventasNetas)}</td>
+                        <td className="r mono">{r.ventasExentas ? fmt(r.ventasExentas) : <span style={{color:'var(--t3)'}}>—</span>}</td>
+                        <td className="r mono">{fmt(r.ventasTotal)}</td>
+                        <td className="r mono" style={{fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(r.ivaDebito)}</td>
+                        <td className="r mono">{r.docsVenta}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{borderTop:'2px solid var(--border)'}}>
+                      <td style={{fontWeight:700}}>Total</td>
+                      <td className="r mono" style={{fontWeight:700}}>{fmt(totNetoEmp)}</td>
+                      <td className="r mono"></td>
+                      <td className="r mono" style={{fontWeight:700}}>{fmt(totVentaTotalEmp)}</td>
+                      <td className="r mono" style={{fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(totDebitoEmp)}</td>
+                      <td className="r mono" style={{fontWeight:700}}>{totDocsEmp}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab==='cuadre' && (
+        <div className="card" style={{overflowX:'auto'}}>
+          <div className="card-hd">
+            <div>
+              <div className="card-title">Cuadre de IVA por empresa y período</div>
+              <div className="card-sub">Solo documentos en estado Registro determinan el impuesto</div>
+            </div>
+          </div>
+          <table className="tbl" style={{minWidth:920}}>
+            <thead>
+              <tr>
+                <th>Empresa</th><th>Período</th>
+                <th className="r">IVA Débito</th><th className="r">IVA Crédito</th>
+                <th className="r">No Recup.</th><th className="r">Otros Imp.</th>
+                <th className="r">IVA Determinado</th><th>Resultado</th><th className="r">Pendientes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cuadreFiltrado.map((r,i) => (
+                <tr key={i}>
+                  <td style={{fontWeight:600}}>{r.empresa}</td>
+                  <td>{pLabel(r.periodo)}</td>
+                  <td className="r mono">{fmt(r.ivaDebito)}</td>
+                  <td className="r mono">{fmt(r.ivaCredito)}</td>
+                  <td className="r mono">{r.ivaNoRecuperable ? fmt(r.ivaNoRecuperable) : <span style={{color:'var(--t3)'}}>—</span>}</td>
+                  <td className="r mono">{r.otrosImpuestos ? fmt(r.otrosImpuestos) : <span style={{color:'var(--t3)'}}>—</span>}</td>
+                  <td className="r mono" style={{fontWeight:700,color:r.ivaDeterminado<0?'var(--g600)':'oklch(50% .17 75)'}}>{fmt(r.ivaDeterminado)}</td>
+                  <td><span className={`pill ${r.resultado==='A pagar'?'a':'g'}`}>{r.resultado}</span></td>
+                  <td className="r">
+                    {r.docsPendientes>0
+                      ? <span className="pill r" title={`${fmt(r.ivaPendiente)} de IVA sin incluir en el crédito`}>{r.docsPendientes}</span>
+                      : <span style={{color:'var(--t3)'}}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab==='resumenes' && (
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {groupKeys.map(k => {
+            const [emp,per,op] = k.split('|');
+            const rows = grupos[k];
+            const gDocs = rows.reduce((s,r)=>s+r.docs,0);
+            const gNeto = rows.reduce((s,r)=>s+r.neto,0);
+            const gIva = rows.reduce((s,r)=>s+r.ivaRecuperable+r.ivaUsoComun+r.ivaNoRecuperable,0);
+            const gTotal = rows.reduce((s,r)=>s+r.total,0);
+            return (
+              <div className="card" key={k} style={{padding:0,overflow:'hidden'}}>
+                <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:10,padding:'14px 18px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span className={`pill ${op==='VENTA'?'g':'a'}`}>{op==='VENTA'?'Ventas':'Compras'}</span>
+                    <span style={{fontWeight:600,fontSize:13.5}}>{emp}</span>
+                    <span style={{color:'var(--t3)',fontSize:12.5}}>{pLabel(per)}</span>
+                  </div>
+                  <div className="mono" style={{display:'flex',gap:16,fontSize:12.5,color:'var(--t2)'}}>
+                    <span>{gDocs} docs</span>
+                    <span style={{color:'var(--t3)'}}>neto {fmt(gNeto)}</span>
+                    <span style={{fontWeight:700,color:'var(--text)'}}>IVA {fmt(gIva)}</span>
+                    <span style={{color:'var(--t3)'}}>total {fmt(gTotal)}</span>
+                  </div>
+                </div>
+                <table className="tbl" style={{borderTop:'1px solid var(--border)'}}>
+                  <thead>
+                    <tr>
+                      <th style={{paddingLeft:18}}>Tipo de documento</th>
+                      <th className="r">Docs.</th><th className="r">Exento</th><th className="r">Neto</th>
+                      <th className="r">IVA Recup.</th><th className="r">IVA Uso Común</th><th className="r">IVA No Recup.</th>
+                      <th className="r" style={{paddingRight:18}}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r,i) => (
+                      <tr key={i}>
+                        <td style={{paddingLeft:18}}>
+                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:'var(--t3)',background:'var(--bg)',borderRadius:4,padding:'1px 6px',marginRight:8}}>{r.cod}</span>
+                          {r.tipoDoc}
+                          {r.estado!=='REGISTRO' && <span className="pill a" style={{marginLeft:8,fontSize:10}}>{r.estado}</span>}
+                        </td>
+                        <td className="r mono">{r.docs}</td>
+                        <td className="r mono">{fmt(r.exento)}</td>
+                        <td className="r mono">{fmt(r.neto)}</td>
+                        <td className="r mono">{fmt(r.ivaRecuperable)}</td>
+                        <td className="r mono">{r.ivaUsoComun ? fmt(r.ivaUsoComun) : <span style={{color:'var(--t3)'}}>—</span>}</td>
+                        <td className="r mono">{r.ivaNoRecuperable ? fmt(r.ivaNoRecuperable) : <span style={{color:'var(--t3)'}}>—</span>}</td>
+                        <td className="r mono" style={{fontWeight:600,paddingRight:18}}>{fmt(r.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
 // ── Home Page ──────────────────────────────────────────────────────────────
 function HomePage({ saldos, movByMonth, gastos, ventas, creditos, fondos, alerts, onNavTo }) {
   const totalBancario = Object.values(saldos).reduce((a,b)=>a+b,0);
@@ -4159,8 +4489,7 @@ function App() {
   const [fbUser, setFbUser] = useState(null);
   const [fbLoading, setFbLoading] = useState(false);
   const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(() => isFirebaseAvailable());
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || 'AIzaSyBtSZRpBnkfBaCzxkeFptH9qTpu609JK70');
-  
+
   // Whitelist de Accesos
   const [allowedModules, setAllowedModules] = useState(['mov']);
   const [fbUserRole, setFbUserRole] = useState('Visualizador');
@@ -4253,15 +4582,6 @@ function App() {
     }
   };
 
-  const saveApiKey = async (key) => {
-    setApiKey(key);
-    localStorage.setItem('GEMINI_API_KEY', key);
-    if (fbUser) {
-      await saveConfigToCloud({ geminiApiKey: key }, umbrales);
-      await logAuditEvent(`Actualizó la clave API de Gemini Flash`, 'seguridad');
-    }
-  };
-
   const handleReinitFirebase = () => {
     setIsFirebaseConfigured(isFirebaseAvailable());
   };
@@ -4307,7 +4627,6 @@ function App() {
         setFbUserRole('Visualizador');
         setAllowedModules(['mov']);
         setAccessDeniedReason(null);
-        localStorage.removeItem('GEMINI_API_KEY');
         window.location.reload();
       } catch (err) {
         console.error("Error logging out:", err);
@@ -4317,12 +4636,6 @@ function App() {
   };
 
   const handleSyncData = (cloudData) => {
-    if (cloudData.settings) {
-      if (cloudData.settings.geminiApiKey) {
-        setApiKey(cloudData.settings.geminiApiKey);
-        localStorage.setItem('GEMINI_API_KEY', cloudData.settings.geminiApiKey);
-      }
-    }
     if (cloudData.umbrales) {
       setUmbrales(cloudData.umbrales);
     }
@@ -4493,7 +4806,7 @@ function App() {
   const handleSaveUmbrales = (nuevosUmbrales) => {
     setUmbrales(nuevosUmbrales);
     if (fbUser) {
-      saveConfigToCloud({ geminiApiKey: apiKey }, nuevosUmbrales);
+      saveConfigToCloud(null, nuevosUmbrales);
       logAuditEvent(`Actualizó los umbrales de alerta financiera`, 'seguridad');
     }
   };
@@ -4755,6 +5068,9 @@ function App() {
         // ── GASTOS FIJOS desde Google Sheets ─────────────────────────────────
         if(GID_GASTOS_FIJOS){try{var gfTxt=await fetch(BASE+'?gid='+GID_GASTOS_FIJOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var gfRows=parseCSV(gfTxt).slice(1).filter(function(r){return r[0];});GASTOS_FIJOS_DATA=gfRows.map(function(r){return{descripcion:r[0]||'',monto:cn(r[1]),dia_pago:parseInt(r[2])||30,categoria:r[3]||'Fijo'};}).filter(function(r){return r.descripcion&&r.monto>0;});console.log('✅ GASTOS FIJOS cargados:',GASTOS_FIJOS_DATA.length,'ítems');}catch(e){console.warn('GASTOS_FIJOS no disponibles:',e.message);}}
         if(GID_FINIQUITOS){try{var finTxt=await fetch(BASE+'?gid='+GID_FINIQUITOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var finRows=parseCSV(finTxt).slice(1).filter(function(r){return r[0];});FINIQUITOS_RAW=finRows.map(function(r){return{nombre:r[0]||'',fecha:toISO(r[1]),tipo:r[2]||'',montoTotal:Math.abs(cn(r[3])),montoPago:Math.abs(cn(r[4])),estado:r[5]||'',comentario:r[6]||''};});console.log('✅ FINIQUITOS cargados:',FINIQUITOS_RAW.length,'registros');}catch(e){console.warn('FINIQUITOS no disponibles:',e.message);}}
+        // ── CUADRE DE IVA (SII) desde Google Sheets ───────────────────────────
+        if(GID_CUADRE_IVA){try{var civTxt=await fetch(BASE+'?gid='+GID_CUADRE_IVA+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var civRows=parseCSV(civTxt).slice(1).filter(function(r){return r[0];});CUADRE_IVA_DATA=civRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',docsVenta:cn(r[2]),ventasNetas:cn(r[3]),ventasExentas:cn(r[4]),ivaDebito:cn(r[5]),ventasTotal:cn(r[6]),docsCompra:cn(r[7]),comprasNetas:cn(r[8]),comprasExentas:cn(r[9]),ivaCredito:cn(r[10]),comprasTotal:cn(r[11]),ivaNoRecuperable:cn(r[12]),otrosImpuestos:cn(r[13]),ivaDeterminado:cn(r[14]),resultado:r[15]||'',ncVenta:cn(r[16]),ncCompra:cn(r[17]),docsPendientes:cn(r[18]),ivaPendiente:cn(r[19])};});console.log('✅ CUADRE IVA cargado:',CUADRE_IVA_DATA.length,'filas');}catch(e){console.warn('CUADRE_IVA no disponible:',e.message);}}
+        if(GID_RESUMENES_SII){try{var resSiiTxt=await fetch(BASE+'?gid='+GID_RESUMENES_SII+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var resSiiRows=parseCSV(resSiiTxt).slice(1).filter(function(r){return r[0];});RESUMENES_SII_DATA=resSiiRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',operacion:r[2]||'',estado:r[3]||'',cod:r[4]||'',tipoDoc:r[5]||'',docs:cn(r[6]),exento:cn(r[7]),neto:cn(r[8]),ivaRecuperable:cn(r[9]),ivaUsoComun:cn(r[10]),ivaNoRecuperable:cn(r[11]),total:cn(r[12]),factor:parseFloat(String(r[13]||'1').replace(',','.'))||1};});console.log('✅ RESÚMENES SII cargados:',RESUMENES_SII_DATA.length,'filas');}catch(e){console.warn('RESUMENES_SII no disponible:',e.message);}}
         // ── COBRANZA MANUAL (override desde Firestore, compartido entre cuentas) ──
         // Si hay una carga manual guardada en la nube, tiene prioridad sobre Google Sheets.
         try{
@@ -4842,8 +5158,8 @@ function App() {
     {id:'fon',  label:'Fondos',      icon:'fon'},
     {id:'cre',  label:'Créditos',    icon:'cre'},
     {id:'fin',  label:'Finiquitos',  icon:'fin'},
+    {id:'iva',  label:'Cuadre IVA',  icon:'iva'},
     {id:'sim',  label:'Simulador',   icon:'sim'},
-    {id:'ia',   label:'Analista IA', icon:'ia'},
     {id:'cloud',label:'Nube Cloud',  icon:'cld'},
     {id:'usuarios', label:'Accesos y Roles', icon:'usr', showOnlyForAdmin:true},
   ];
@@ -4851,12 +5167,12 @@ function App() {
     home:'Resumen General',
     mov:'Movimientos Bancarios',
     sim:'Simulador Predictivo',
-    ia:'Analista IA Financiero',
     gas:'Proyección de Gastos',
     ven:'Reporte de Ventas',
     fon:'Fondos Mutuos',
     cre:'Créditos y Préstamos',
     fin:'Finiquitos y Préstamos',
+    iva:'Cuadre de IVA',
     cloud:'Conexión Nube Cloud',
     usuarios:'Accesos y Roles'
   };
@@ -4864,12 +5180,12 @@ function App() {
     home:'Vista consolidada',
     mov:'Saldos en tiempo real',
     sim:'Simulador interactivo de runway a 12 meses',
-    ia:'Auditoría financiera inteligente computada por IA',
     gas:'Pagos y vencimientos',
     ven:'Facturación del período',
     fon:'Patrimonio invertido',
     cre:'Deuda y amortizaciones',
     fin:'Finiquitos y préstamos a trabajadores',
+    iva:'IVA débito, crédito y determinado por empresa, desde el SII',
     cloud:'Sincronización segura de configuraciones con Firebase',
     usuarios:'Gestión de lista de permitidos y permisos de módulos en tiempo real'
   };
@@ -5033,12 +5349,12 @@ function App() {
           />
         )}
         {active==='sim'  && <RunwaySimulatorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} />}
-        {active==='ia'   && <AIAdvisorPage saldos={unificatedSaldos} movRecientes={unificatedMovRecientes} apiKey={apiKey} saveApiKey={saveApiKey} />}
         {active==='gas'  && <GastosPage nominaVer={nominaVer} fbUser={fbUser}/>}
         {active==='ven'  && <VentasPage onUpload={()=>setShowUploadVentas(true)} dataLoaded={dataLoaded}/>}
         {active==='fon'  && <FondosPage/>}
         {active==='cre'  && <CreditosPage saldos={unificatedSaldos}/>}
         {active==='fin'  && <FiniquitosPage/>}
+        {active==='iva'  && <CuadreIvaPage/>}
         {active==='cloud'&& (
           <CloudSyncPage 
             isFirebaseConfigured={isFirebaseConfigured} 
@@ -6728,805 +7044,6 @@ function RunwaySimulatorPage({ saldos, movRecientes }) {
     </div>
   );
 }
-
-// ── AI CFO Advisor Page Component ──
-function AIAdvisorPage({ saldos, movRecientes, apiKey, saveApiKey }) {
-  const [pregunta, setPregunta] = useState('');
-  const [chatResponse, setChatResponse] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-
-  const totalCaja = Object.values(saldos || SALDOS_BANCO).reduce((a, b) => a + b, 0);
-  const totalInversiones = FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
-  
-  const sueldosTotal = NOMINA_DATA.reduce((s, e) => s + e.monto, 0);
-  const anticiposTotal = ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0);
-  const fijosTotal = GASTOS_FIJOS_DATA.reduce((s, f) => s + f.monto, 0);
-  const cobranzaVencida = COB_PENDIENTES.reduce((s, c) => c.estado === 'VENCIDO' ? s + c.saldo : s, 0);
-
-  // Obtener mayor deudor
-  const debtors = {};
-  COB_PENDIENTES.forEach(c => {
-    if (c.estado === 'VENCIDO') {
-      debtors[c.empresa] = (debtors[c.empresa] || 0) + c.saldo;
-    }
-  });
-  let maxDebtorName = 'Sin Deudores';
-  let maxDebtorVal = 0;
-  Object.keys(debtors).forEach(name => {
-    if (debtors[name] > maxDebtorVal) {
-      maxDebtorVal = debtors[name];
-      maxDebtorName = name;
-    }
-  });
-  const maxDebtorPercent = cobranzaVencida > 0 ? (maxDebtorVal / cobranzaVencida) * 100 : 0;
-
-  const creditosMes = CREDITOS_SHEETS_RAW.filter(c => c.estado !== 'Pagado').reduce((s, c) => s + c.montoPago, 0);
-  const runwayDias = (sueldosTotal + anticiposTotal + fijosTotal) > 0 ? Math.round(totalCaja / ((sueldosTotal + anticiposTotal + fijosTotal) / 30)) : 365;
-
-  const getReferenceDate = () => {
-    let d = new Date();
-    if (movRecientes && movRecientes.length > 0 && movRecientes[0].fecha) {
-      const parsed = new Date(movRecientes[0].fecha + 'T12:00:00');
-      if (!isNaN(parsed.getTime())) {
-        d = parsed;
-      }
-    }
-    return d;
-  };
-
-  const cleanText = (str) => {
-    return str
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // remove accents
-      .replace(/[¿?.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // remove punctuation
-      .trim();
-  };
-
-  const buildContext = () => {
-    const refDate = getReferenceDate();
-    const activeSaldos = saldos || SALDOS_BANCO;
-    const totalBancos = Object.values(activeSaldos).reduce((a, b) => a + b, 0);
-    const activeNomina = NOMINA_DATA && NOMINA_DATA.length ? NOMINA_DATA : [];
-    
-    const activeMovs = movRecientes || MOV_RECIENTES || [];
-    const movsSummary = activeMovs.slice(0, 35).map(m => 
-      `- ${m.fecha}: ${m.descripcion} | Monto: ${m.monto} | Banco: ${m.banco}`
-    ).join("\n");
-
-    const vencidas = COB_PENDIENTES.filter(c => c.estado === 'VENCIDO');
-    const sumVencidas = vencidas.reduce((s, c) => s + c.saldo, 0);
-    const pendientes = COB_PENDIENTES.filter(c => c.estado === 'PENDIENTE');
-    const sumPendientes = pendientes.reduce((s, c) => s + c.saldo, 0);
-
-    const activeCreditos = CREDITOS_SHEETS_RAW.filter(c => c.estado !== 'Pagado');
-    const creditosSummary = activeCreditos.map(c => 
-      `- ${c.banco}: Cuota de ${c.montoPago} (Día Pago: ${c.diaPago})`
-    ).join("\n");
-
-    const activeFiniquitos = FINIQUITOS_RAW.filter(f => f.estado !== 'Pagado');
-    const finiquitosSummary = activeFiniquitos.map(f => 
-      `- ${f.trabajador} (${f.empresa}): ${f.montoPago} | Fecha: ${f.fecha}`
-    ).join("\n");
-
-    const activeGastos = GASTOS || [];
-    const gastosPendientes = activeGastos.filter(g => g.estado === 'Pendiente');
-    const sumGastosPendientes = gastosPendientes.reduce((s, g) => s + g.monto, 0);
-    const gastosPagados = activeGastos.filter(g => g.estado === 'Pagado');
-    const sumGastosPagados = gastosPagados.reduce((s, g) => s + g.monto, 0);
-
-    const gastosPendSummary = gastosPendientes.map(g => 
-      `- ${g.fecha}: ${g.descripcion} | Monto: ${fmt(g.monto)}`
-    ).join("\n");
-
-    const gastosPagSummary = gastosPagados.map(g => 
-      `- ${g.fecha}: ${g.descripcion} | Monto: ${fmt(g.monto)}`
-    ).join("\n");
-
-    return `
-=== CONTEXTO FINANCIERO EN TIEMPO REAL (GRAFHIKA & GMD) ===
-Fecha de Corte/Referencia: ${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
-
-1. SALDOS OPERATIVOS EN BANCOS:
-Total Caja Consolidado: ${fmt(totalBancos)}
-${Object.entries(activeSaldos).map(([b, val]) => `- ${b}: ${fmt(val)}`).join("\n")}
-
-2. INVERSIONES ACTIVAS:
-Total en Fondos Mutuos (FFMM): ${fmt(totalInversiones)}
-
-3. COMPROMISOS RECURRENTES MENSUALES (EGRESOS OPERATIVOS):
-- Sueldos/Planilla de Remuneraciones: ${fmt(sueldosTotal)} (para ${activeNomina.reduce((s, e) => s + (e.personas || 1), 0)} personas)
-  Desglose de nómina por empresa:
-  ${activeNomina.map(e => `  * ${e.empresa}: ${fmt(e.monto)} (${e.personas || 1} personas)`).join("\n")}
-- Anticipos: ${fmt(anticiposTotal)}
-- Gastos Fijos de Planta (Arriendos, Seguros, etc.): ${fmt(fijosTotal)}
-- Total Egresos Recurrentes Mínimos: ${fmt(sueldosTotal + anticiposTotal + fijosTotal)}
-- Runway en cuentas corrientes: ${runwayDias} días de cobertura.
-
-4. CARTERA DE CUENTAS POR COBRAR (COBRANZA ACTIVA):
-- Cobranza ya VENCIDA (en mora): ${fmt(sumVencidas)} (${vencidas.length} facturas vencidas)
-  * Mayor Deudor Individual: ${maxDebtorName} con una deuda acumulada de ${fmt(maxDebtorVal)} (${maxDebtorPercent.toFixed(1)}% de la cartera vencida)
-- Cobranza por vencer (PENDIENTE): ${fmt(sumPendientes)}
-
-5. CRÉDITOS BANCARIOS ACTIVOS (DEUDA):
-Cuotas de este mes sumadas: ${fmt(creditosMes)}
-Desglose de cuotas vigentes:
-${creditosSummary || "- No hay créditos vigentes"}
-
-6. FINIQUITOS Y EGRESOS LABORALES EXTRAORDINARIOS:
-Total Finiquitos Pendientes este mes: ${fmt(activeFiniquitos.reduce((s, f) => s + f.montoPago, 0))}
-Desglose:
-${finiquitosSummary || "- No hay finiquitos pendientes"}
-
-7. HISTORIAL RECIENTE DE TRANSACCIONES (Últimos 35 movimientos en cartolas):
-${movsSummary}
-
-8. CHEQUES Y PROYECCIÓN DE GASTOS (PAGADOS Y PENDIENTES):
-Total Egresos Proyectados / Cheques Pendientes: ${fmt(sumGastosPendientes)} (${gastosPendientes.length} cheques pendientes)
-Desglose de Cheques Pendientes (por cobrar / cobro pendiente):
-${gastosPendSummary || "- No hay cheques pendientes"}
-
-Total Egresos / Cheques ya PAGADOS: ${fmt(sumGastosPagados)} (${gastosPagados.length} cheques pagados)
-Desglose de Cheques ya Pagados (cobrados / efectuados):
-${gastosPagSummary || "- No hay cheques pagados"}
-==========================================================
-    `;
-  };
-
-  const buildSystemPrompt = () => {
-    return `Eres un Analista Financiero de Inteligencia Artificial (AI CFO) experto para el grupo de empresas Grafhika & GMD (de Chile).
-Tu objetivo es responder de manera analítica, clara y con un tono ejecutivo las preguntas del director sobre la contabilidad de la empresa basándote en el CONTEXTO FINANCIERO EN TIEMPO REAL provisto.
-
-Reglas críticas de comportamiento:
-1. Precisión Matemática: Si la pregunta requiere sumas, filtros o comparaciones sobre los movimientos, bancos, cobranzas, sueldos o cheques proyectados/pagados, realiza los cálculos de forma rigurosa usando los datos exactos del contexto.
-2. Contexto de Fechas: La fecha actual del sistema es la "Fecha de Corte/Referencia" indicada en el contexto (usualmente mayo de 2026). A partir de esa fecha, calcula rangos de tiempo relativos (ej. "últimos 2 meses" abarca abril y mayo de 2026).
-3. Moneda: Todos los valores monetarios deben expresarse en Pesos Chilenos (CLP) con separadores de miles mediante puntos (ej. $12.955.344) y sin decimales.
-4. Estilo y Formato: Responde de forma sumamente profesional. Utiliza formato HTML para estructurar tu respuesta de manera visualmente premium (negritas con <strong>, listas con <ul> y <li>, viñetas, saltos de línea con <br>, etc.). No uses Markdown en tu respuesta final, sino HTML limpio.
-5. Transparencia: Si no dispones de datos para responder a una pregunta en el contexto, indícalo de forma educada pero directa.
-
-Recuerda: 
-- Si te pregunta sobre cuánto se le pagó o transfirió a alguien en los últimos 2 meses o períodos similares, busca palabras clave del nombre en la lista de transacciones (sección 7), suma sus montos absolutos, indica qué transacciones encontraste (fecha, descripción y monto) y detalla a qué banco corresponde.
-- Si te pregunta sobre la "proyección" de gastos o sobre los "cheques pagados" o "cheques pendientes", consulta la Sección 8 del contexto ("CHEQUES Y PROYECCIÓN DE GASTOS"). Suma o detalla los elementos correspondientes de esta sección y responde detalladamente indicando fechas, beneficiarios (descripción) y montos.`;
-  };
-
-  const runOfflineQuery = (query, queryInput, errorMsg = "") => {
-    let text = '';
-
-    // Predefined shortcuts from tags
-    if (query === 'diagnostico') {
-      text = `<strong>Diagnóstico de Salud Financiera:</strong><br><br>
-      La situación financiera del grupo se cataloga como <strong>Sólida con Atención en Cartera</strong>.<br><br>
-      • <strong>Fortaleza:</strong> Dispones de una liquidez de <strong>${fmt(totalCaja)}</strong> en caja operativa consolidada, lo que te blinda operativamente frente a imprevistos en el corto plazo.<br>
-      • <strong>Debilidad:</strong> Tienes una planilla de sueldos mensual considerable de <strong>${fmt(sueldosTotal)}</strong>, anticipos por <strong>${fmt(anticiposTotal)}</strong> y gastos fijos de <strong>${fmt(fijosTotal)}</strong>. Esto exige un ingreso de planta constante de al menos <strong>${fmt(sueldosTotal + anticiposTotal + fijosTotal)}</strong> mensual para no consumir tu caja acumulada.<br>
-      • <strong>Relación GMD & Grafhika:</strong> El sistema ha detectado y aislado los movimientos inter-compañías entre las empresas hermanas (incluyendo traspasos directos y TEFs recurrentes). Estos flujos internos han sido completamente excluidos de las métricas de ingresos y egresos de caja para entregar un análisis de rentabilidad orgánico y libre de doble contabilidad.<br>
-      • <strong>Riesgo:</strong> El simulador muestra que, en caso de que la cobranza caiga al 50% de efectividad, la caja operativa podría contraerse considerablemente en los próximos 6 meses si no se cuenta con retiros de tus fondos de inversión.`;
-    } else if (query === 'riesgo-clientes') {
-      text = `<strong>Análisis de Cartera y Clientes Críticos:</strong><br><br>
-      La cobranza total pendiente en estado VENCIDO suma un total de <strong>${fmt(cobranzaVencida)}</strong>.<br><br>
-      • <strong>Mayor Deudor Individual:</strong> La empresa <strong>${maxDebtorName}</strong> adeuda un saldo neto de <strong>${fmt(maxDebtorVal)}</strong>, concentrando un preocupante <strong>${maxDebtorPercent.toFixed(1)}%</strong> del riesgo total de tu cartera de cobro.<br>
-      • <strong>Gestión Directa:</strong> Se aconseja iniciar contacto preventivo inmediato.<br>
-      • <strong>Alternativa de Liquidez:</strong> Ceder estos folios vencidos de clientes corporativos triple-A a factoring inyectará caja de inmediato reduciendo el costo de cobranza judicial.`;
-    } else if (query === 'runway-analisis') {
-      text = `<strong>Análisis Detallado de Runway y Nómina:</strong><br><br>
-      Tus egresos recurrentes de planta mensuales son de <strong>${fmt(sueldosTotal + anticiposTotal + fijosTotal)}</strong>, divididos de la siguiente forma:<br><br>
-      • <strong>Remuneraciones Consolidadas:</strong> <strong>${fmt(sueldosTotal)}</strong> mensual. Distribuido entre tus filiales.<br>
-      • <strong>Anticipos:</strong> <strong>${fmt(anticiposTotal)}</strong> mensual.<br>
-      • <strong>Gastos Fijos Operativos:</strong> <strong>${fmt(fijosTotal)}</strong> (incluyendo mano de obra de maestros y seguros vehiculares).<br><br>
-      Tu runway de caja es de aproximadamente <strong>${((sueldosTotal + anticiposTotal + fijosTotal) > 0 ? totalCaja / (sueldosTotal + anticiposTotal + fijosTotal) : 0).toFixed(1)} meses</strong>. Si a esto le sumamos el peso de los créditos bancarios activos este mes (que suman <strong>${fmt(creditosMes)}</strong> en cuotas), el runway se mantiene por sobre los <strong>120 días</strong>, dándote una gran ventaja competitiva y holgura en tu mercado.`;
-    } else if (query === 'estrategia-90') {
-      text = `<strong>Recomendaciones Estratégicas para los Próximos 90 Días:</strong><br><br>
-      1. <strong>Campaña Preferencial sobre ${maxDebtorName}</strong>: Enfocar al equipo de finanzas en recuperar los <strong>${fmt(maxDebtorVal)}</strong> pendientes. El retorno de este monto extiende tu runway en más de 90 días de forma automática.<br>
-      2. <strong>Rentabilización de Caja Inactiva</strong>: Mantienes saldos de cuenta corriente ociosos. Recomendamos traspasar excedentes a Fondos Mutuos de rescate inmediato para generar retornos sin asumir riesgos corporativos.<br>
-      3. <strong>Planificación ante Vencimientos</strong>: Las cuotas de créditos se concentran a inicios del mes (día 4 y día 13). Asegurar que las cuentas corrientes tengan saldo suficiente al menos 48h hábiles antes para evitar sobregiros automáticos y cargos de interés comercial.`;
-    } 
-    // 1. BANK BALANCE / LIQUIDITY
-    else if (
-      query.includes("banco") ||
-      query.includes("caja") ||
-      query.includes("liquidez") ||
-      query.includes("dinero") ||
-      query.includes("plata") ||
-      query.includes("efectivo") ||
-      query.includes("cuenta corriente") ||
-      query.includes("cuentas corrientes") ||
-      query.includes("saldo")
-    ) {
-      const activeSaldos = saldos || SALDOS_BANCO;
-      const totalBancos = Object.values(activeSaldos).reduce((a, b) => a + b, 0);
-      const breakdown = Object.entries(activeSaldos)
-        .map(([banco, monto]) => `• <strong>${banco}</strong>: ${fmt(monto)}`)
-        .join("<br>");
-
-      text = `<strong>Resumen de Saldos Bancarios y Liquidez Inmediata:</strong><br><br>
-      Dispones de un saldo de caja consolidado de <strong>${fmt(totalBancos)}</strong> en tus cuentas corrientes.<br><br>
-      <strong>Desglose por Entidad Bancaria:</strong><br>${breakdown}<br><br>
-      <em>Nota: Esta liquidez te entrega una base robusta para la cobertura de egresos. No incluye tus fondos de inversión en FFMM.</em>`;
-    }
-    // 2. NOMINA / SUELDOS
-    else if (
-      query.includes("sueldo") ||
-      query.includes("sueldos") ||
-      query.includes("nomina") ||
-      query.includes("remuneracion") ||
-      query.includes("remuneraciones") ||
-      query.includes("planilla") ||
-      query.includes("trabajador") ||
-      query.includes("trabajadores") ||
-      query.includes("empleado") ||
-      query.includes("empleados")
-    ) {
-      const activeNomina = NOMINA_DATA && NOMINA_DATA.length ? NOMINA_DATA : [];
-      const totalSueldos = activeNomina.reduce((s, e) => s + e.monto, 0);
-      const totalPersonas = activeNomina.reduce((s, e) => s + (e.personas || 1), 0);
-
-      let breakdown = "";
-      if (activeNomina.length > 0) {
-        breakdown = "<strong>Desglose por Empresa:</strong><br>" + activeNomina
-          .map(e => `• <strong>${e.empresa}</strong>: ${fmt(e.monto)} (${e.personas || 1} personas)`)
-          .join("<br>");
-      } else {
-        const fallbackNom = (typeof SUELDOS_DATA !== 'undefined' && SUELDOS_DATA.length) 
-          ? SUELDOS_DATA.reduce((s, f) => s + f.monto, 0)
-          : 0;
-        if (fallbackNom > 0) {
-          breakdown = `• Nómina estimada de planta (Google Sheets): <strong>${fmt(fallbackNom)}</strong>`;
-        } else {
-          breakdown = "<em>No se registra nómina cargada en el sistema para este período.</em>";
-        }
-      }
-
-      text = `<strong>Análisis de Nómina y Remuneraciones del Período:</strong><br><br>
-      Este mes se registra un egreso acumulado de <strong>${fmt(totalSueldos || sueldosTotal)}</strong> para el pago de remuneraciones, cubriendo a un total estimado de <strong>${totalPersonas || 1}</strong> colaboradores.<br><br>
-      ${breakdown}<br><br>
-      <em>Recomendación: La nómina de sueldos constituye tu mayor compromiso de egreso fijo recurrente. Asegurar saldo suficiente el día 30 en cuentas operativas.</em>`;
-    }
-    // 3. COBRANZAS / CUENTAS POR COBRAR / RECEIVABLES
-    else if (
-      query.includes("cobrar") ||
-      query.includes("cobranza") ||
-      query.includes("factura") ||
-      query.includes("facturas") ||
-      query.includes("cliente") ||
-      query.includes("clientes") ||
-      query.includes("deuda") ||
-      query.includes("deudas") ||
-      query.includes("deudor") ||
-      query.includes("deudores")
-    ) {
-      // Extract day count using regex
-      let days = 30; // default to 30 days
-      const matchDias = query.match(/(\d+)\s*dia/);
-      const matchMeses = query.match(/(\d+)\s*mes/);
-      if (matchDias) {
-        days = parseInt(matchDias[1], 10);
-      } else if (matchMeses) {
-        days = parseInt(matchMeses[1], 10) * 30;
-      } else if (query.includes("quince")) {
-        days = 15;
-      } else if (query.includes("una semana") || query.includes("1 semana") || query.includes("7 dias")) {
-        days = 7;
-      } else if (query.includes("mes") && !query.includes("meses")) {
-        days = 30;
-      }
-
-      const refDate = getReferenceDate();
-      const targetDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + days, 12, 0, 0);
-
-      const vencidas = COB_PENDIENTES.filter(c => c.estado === 'VENCIDO');
-      const sumVencidas = vencidas.reduce((s, c) => s + c.saldo, 0);
-
-      const porVencer = COB_PENDIENTES.filter(c => {
-        if (c.estado !== 'PENDIENTE' || !c.vencimiento) return false;
-        const d = new Date(c.vencimiento + 'T12:00:00');
-        return d >= refDate && d <= targetDate;
-      });
-      const sumPorVencer = porVencer.reduce((s, c) => s + c.saldo, 0);
-
-      const debtors = {};
-      porVencer.forEach(c => {
-        debtors[c.empresa] = (debtors[c.empresa] || 0) + c.saldo;
-      });
-      const topDebtors = Object.entries(debtors)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([name, val]) => `• <strong>${name}</strong>: ${fmt(val)}`)
-        .join("<br>");
-
-      text = `<strong>Auditoría de Cuentas por Cobrar (Próximos ${days} días):</strong><br><br>
-      El sistema proyecta el siguiente panorama de cobranza desde el día de corte (<strong>${refDate.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>):<br><br>
-      • <strong>Cobranza por vencer (próximos ${days} días)</strong>: <strong>${fmt(sumPorVencer)}</strong> (${porVencer.length} facturas activas).<br>
-      • <strong>Cobranza ya VENCIDA (mora acumulada)</strong>: <strong>${fmt(sumVencidas)}</strong> (${vencidas.length} facturas vencidas).<br>
-      • <strong>Cuentas por cobrar totales disponibles</strong>: <strong>${fmt(sumVencidas + sumPorVencer)}</strong>.<br><br>
-      ${topDebtors.length > 0 ? `<strong>Clientes clave con vencimientos en este período:</strong><br>${topDebtors}<br><br>` : ''}
-      <em>Estrategia: Un total de ${fmt(sumPorVencer)} está programado para entrar en caja de forma natural. Se aconseja un seguimiento preventivo 5 días antes de cada vencimiento crítico.</em>`;
-    }
-    // 4. FONDOS MUTUOS / INVERSIONES
-    else if (
-      query.includes("fondos") ||
-      query.includes("ffmm") ||
-      query.includes("inversion") ||
-      query.includes("inversiones") ||
-      query.includes("ahorro")
-    ) {
-      const activeFondos = FONDOS && FONDOS.length > 0 ? FONDOS[FONDOS.length - 1].total : 0;
-      text = `<strong>Auditoría de Fondos de Inversión y Excedentes:</strong><br><br>
-      Mantienes una cartera activa de Fondos Mutuos valorizada en <strong>${fmt(activeFondos || totalInversiones)}</strong>.<br><br>
-      • <strong>Rol del Portafolio:</strong> Estos fondos actúan como reserva líquida de contingencia y generan retornos diarios sobre tus excedentes.<br>
-      • <strong>Facilidad de Rescate:</strong> Dado su carácter de rescate en 24/48 horas, se consideran caja de respaldo inmediata frente a caídas drásticas de facturación.<br><br>
-      <em>Recomendación: En caso de requerir caja para cubrir finiquitos imprevistos o cuotas de créditos, realizar rescates parciales para no sobregirar las cuentas operativas.</em>`;
-    }
-    // 5. CREDITOS
-    else if (
-      query.includes("credito") ||
-      query.includes("prestamo") ||
-      query.includes("prestamos") ||
-      query.includes("creditos") ||
-      query.includes("cuota") ||
-      query.includes("cuotas") ||
-      query.includes("deuda bancaria")
-    ) {
-      const activeCreditos = CREDITOS_SHEETS_RAW.filter(c => c.estado !== 'Pagado');
-      const totalCuotaMes = activeCreditos.reduce((s, c) => s + c.montoPago, 0);
-      const outstandingSum = activeCreditos.reduce((s, c) => s + (c.saldoPendiente || c.montoTotal || 0), 0);
-
-      let breakdown = "";
-      if (activeCreditos.length > 0) {
-        breakdown = "<strong>Créditos activos contratados:</strong><br>" + activeCreditos
-          .map(c => `• <strong>${c.banco}</strong>: Cuota de ${fmt(c.montoPago)} (Vence el día ${c.diaPago || 'N/A'})`)
-          .join("<br>");
-      } else {
-        breakdown = "<em>No se registran créditos bancarios pendientes de pago para este período.</em>";
-      }
-
-      text = `<strong>Estado de Créditos Bancarios y Compromisos Financieros:</strong><br><br>
-      Este mes debes cubrir un total de <strong>${fmt(totalCuotaMes || creditosMes)}</strong> en cuotas de créditos bancarios activos.<br><br>
-      ${breakdown}<br><br>
-      • <strong>Saldo Pendiente Estimado de Deuda Bancaria</strong>: <strong>${fmt(outstandingSum)}</strong>.<br><br>
-      <em>Nota: Las cuotas de amortización representan un egreso de caja ineludible. Asegurar liquidez en las cuentas corrientes correspondientes en sus días de vencimiento.</em>`;
-    }
-    // 6. FINIQUITOS
-    else if (
-      query.includes("finiquito") ||
-      query.includes("finiquitos") ||
-      query.includes("despido") ||
-      query.includes("indemnizacion")
-    ) {
-      const activeFiniquitos = FINIQUITOS_RAW.filter(f => f.estado !== 'Pagado');
-      const sumFiniquitos = activeFiniquitos.reduce((s, f) => s + f.montoPago, 0);
-
-      let breakdown = "";
-      if (activeFiniquitos.length > 0) {
-        breakdown = "<strong>Detalle de Finiquitos Pendientes:</strong><br>" + activeFiniquitos
-          .map(f => `• <strong>${f.trabajador || 'Trabajador'}</strong> (${f.empresa || 'Empresa'}): ${fmt(f.montoPago)} - Vencimiento: ${f.fecha || 'N/A'}`)
-          .join("<br>");
-      } else {
-        breakdown = "<em>No se registran finiquitos ni indemnizaciones pendientes de pago para este mes.</em>";
-      }
-
-      text = `<strong>Reporte de Finiquitos y Compromisos Laborales Extraordinarios:</strong><br><br>
-      El total por pagar por concepto de finiquitos y salidas extraordinarias de personal este mes es de <strong>${fmt(sumFiniquitos)}</strong>.<br><br>
-      ${breakdown}<br><br>
-      <em>Sugerencia: Estos egresos son de alta prioridad legal. Asegura los saldos o utiliza la línea de crédito si los flujos de cobranza se retrasan.</em>`;
-    }
-    // 7. TRASPASOS / PAGOS / TRANSFERENCIAS PERSONALIZADOS (e.g. Brandon Villarroel)
-    else if (
-      query.includes("transferi") || 
-      query.includes("transfiri") || 
-      query.includes("transferencia") || 
-      query.includes("transferencias") || 
-      query.includes("traspas") || 
-      query.includes("traspaso") || 
-      query.includes("traspasos") || 
-      query.includes("pago") || 
-      query.includes("pagos") || 
-      query.includes("pagar") ||
-      query.includes("pagamos")
-    ) {
-      let days = 60; // default to 60 days
-      let hasExplicitTimeframe = false;
-      const matchDias = query.match(/(\d+)\s*dia/);
-      const matchMeses = query.match(/(\d+)\s*mes/);
-      if (matchDias) {
-        days = parseInt(matchDias[1], 10);
-        hasExplicitTimeframe = true;
-      } else if (matchMeses) {
-        days = parseInt(matchMeses[1], 10) * 30;
-        hasExplicitTimeframe = true;
-      } else if (query.includes("quince")) {
-        days = 15;
-        hasExplicitTimeframe = true;
-      } else if (query.includes("una semana") || query.includes("1 semana") || query.includes("7 dias")) {
-        days = 7;
-        hasExplicitTimeframe = true;
-      } else if (query.includes("mes") && !query.includes("meses")) {
-        days = 30;
-        hasExplicitTimeframe = true;
-      }
-
-      const refDate = getReferenceDate();
-      const startDateLimit = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - days, 12, 0, 0);
-
-      const activeMovs = movRecientes || MOV_RECIENTES || [];
-      const dateFilteredMovs = activeMovs.filter(m => {
-        if (!m.fecha) return false;
-        const d = new Date(m.fecha + 'T12:00:00');
-        if (hasExplicitTimeframe) {
-          return d >= startDateLimit && d <= refDate;
-        }
-        return true; // Search all if no timeframe is specified
-      });
-
-      const stopwords = ['cuanto', 'se', 'le', 'transfirio', 'transferio', 'transferir', 'transfiri', 'durante', 'los', 'ultimos', 'ultimo', 'mes', 'meses', 'dia', 'dias', 'quince', 'semana', 'semanas', 'este', 'esta', 'del', 'con', 'para', 'por', 'una', 'uno', 'unos', 'unas', 'que', 'quien', 'quienes', 'aqui', 'alla', 'hacer', 'hemos', 'tiene', 'tienen', 'habia', 'total', 'suma', 'pesos', 'clp', 'a', 'de', 'le', 'la', 'lo', 'las', 'los', 'un', 'el', 'en', 'y', 'o', 'u', 'e', 'al', 'del', 'pago', 'pagos', 'pagamos', 'pagar', 'traspaso', 'traspasos', 'transferencia', 'transferencias', 'movimiento', 'movimientos', 'gasto', 'gastos', 'egreso', 'egresos', 'ingreso', 'ingresos'];
-      
-      const words = query.split(/\s+/).map(w => cleanText(w)).filter(w => w.length >= 3 && !stopwords.includes(w));
-
-      let matchedMovs = [];
-      if (words.length > 0) {
-        matchedMovs = dateFilteredMovs.filter(m => {
-          if (!m.descripcion) return false;
-          const desc = cleanText(m.descripcion);
-          return words.some(word => desc.includes(word));
-        });
-      }
-
-      if (words.length > 0 && matchedMovs.length > 0) {
-        const sumTransfers = matchedMovs.reduce((s, m) => s + Math.abs(m.monto), 0);
-        const countTransfers = matchedMovs.length;
-
-        const bankGroup = {};
-        matchedMovs.forEach(m => {
-          bankGroup[m.banco] = (bankGroup[m.banco] || 0) + Math.abs(m.monto);
-        });
-        const bankBreakdown = Object.entries(bankGroup)
-          .map(([bank, val]) => `• <strong>
-${bank}</strong>: ${fmt(val)}`)
-          .join('<br>');
-
-        const listDetails = matchedMovs.slice(0, 10)
-          .map(m => `• <strong>${m.fecha}</strong>: ${m.descripcion} - <strong>${fmt(Math.abs(m.monto))}</strong> (${m.banco})`)
-          .join('<br>');
-
-        text = `<strong>Auditoría de Transferencias y Pagos Realizados:</strong><br><br>
-        Se han identificado <strong>${countTransfers}</strong> movimientos que coinciden con los términos de búsqueda (<em>"${words.join(', ')}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en todo el historial disponible'}:<br><br>
-        • <strong>Monto total transferido</strong>: <strong>${fmt(sumTransfers)}</strong>.<br><br>
-        <strong>Desglose por Entidad Bancaria:</strong><br>${bankBreakdown}<br><br>
-        <strong>Movimientos detectados (hasta 10):</strong><br>${listDetails}<br><br>
-        <em>Análisis: Estos egresos corresponden a transferencias bancarias directas y cobros registrados en tus cartolas.</em>`;
-      } else {
-        const searchedTerms = words.length > 0 ? words.join(', ') : 'términos vacíos';
-        text = `<strong>Consulta de Transferencias / Pagos:</strong><br><br>
-        No se encontraron transferencias o pagos que coincidan con los términos de tu búsqueda (<em>"${searchedTerms}"</em>)${hasExplicitTimeframe ? ` en los últimos ${days} días` : ' en el historial'}.<br><br>
-        • <strong>Sugerencia</strong>: Asegúrate de escribir el nombre o razón social correcto (por ejemplo, <em>"Brandon Villarroel"</em>, <em>"Jaime"</em>, o <em>"Poliplas"</em>).`;
-      }
-    }
-    // 7.5 CHEQUES Y PROYECCIONES
-    else if (
-      query.includes("cheque") ||
-      query.includes("cheques") ||
-      query.includes("proyeccion") ||
-      query.includes("proyecciones") ||
-      query.includes("proyectado") ||
-      query.includes("proyectados")
-    ) {
-      const activeGastos = GASTOS || [];
-      const pendientes = activeGastos.filter(g => g.estado === 'Pendiente');
-      const pagados = activeGastos.filter(g => g.estado === 'Pagado');
-      const totalPend = pendientes.reduce((s, g) => s + g.monto, 0);
-      const totalPag = pagados.reduce((s, g) => s + g.monto, 0);
-
-      const listPend = pendientes.slice(0, 8)
-        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
-        .join('<br>');
-
-      const listPag = pagados.slice(0, 8)
-        .map(g => `• <strong>${g.fecha}</strong>: ${g.descripcion} - <strong>${fmt(g.monto)}</strong>`)
-        .join('<br>');
-
-      text = `<strong>Control y Proyección de Cheques (Gastos Proyectados):</strong><br><br>
-      • <strong>Cheques/Egresos PENDIENTES</strong>: <strong>${fmt(totalPend)}</strong> (${pendientes.length} cheques por cobrar).<br>
-      • <strong>Cheques/Egresos PAGADOS</strong>: <strong>${fmt(totalPag)}</strong> (${pagados.length} cheques cobrados).<br>
-      • <strong>Total Cartera de Proyección</strong>: <strong>${fmt(totalPend + totalPag)}</strong> (marzo – mayo 2026).<br><br>
-      ${pendientes.length > 0 ? `<strong>Próximos Cheques por cobrar (hasta 8):</strong><br>${listPend}<br><br>` : ''}
-      ${pagados.length > 0 ? `<strong>Cheques ya Cobrados/Pagados (hasta 8):</strong><br>${listPag}<br><br>` : ''}
-      <em>Análisis de Proyección: La cartera de cheques representa los compromisos adquiridos con proveedores en base a la facturación proyectada.</em>`;
-    }
-    // 8. GASTOS FIJOS / GASTOS GENERALES
-    else if (
-      query.includes("gasto") ||
-      query.includes("gastos") ||
-      query.includes("egreso") ||
-      query.includes("egresos") ||
-      query.includes("salida") ||
-      query.includes("costo") ||
-      query.includes("costos")
-    ) {
-      const totalSueldos = NOMINA_DATA.reduce((s, e) => s + e.monto, 0);
-      const totalAnticipos = ANTICIPOS_DATA.reduce((s, e) => s + e.monto, 0);
-      const variableGastos = GASTOS.filter(g => !g.estado || g.estado.toLowerCase() !== 'pagado').reduce((s, g) => s + g.monto, 0);
-
-      text = `<strong>Análisis Consolidado de Egresos y Gastos Operativos:</strong><br><br>
-      Tu estructura mensual estimada de salidas de caja asciende a un total de <strong>${fmt(totalSueldos + totalAnticipos + fijosTotal + variableGastos)}</strong>, dividida de la siguiente manera:<br><br>
-      • <strong>Remuneraciones (Sueldos)</strong>: <strong>${fmt(totalSueldos)}</strong> (Planilla fija de trabajadores).<br>
-      ${totalAnticipos>0?`• <strong>Anticipos</strong>: <strong>${fmt(totalAnticipos)}</strong>.<br>`:''}
-      • <strong>Gastos Fijos Operativos</strong>: <strong>${fmt(fijosTotal)}</strong> (Contratos de arriendo, seguros, y servicios recurrentes).<br>
-      • <strong>Gastos Variables / Facturas de Proveedores por pagar</strong>: <strong>${fmt(variableGastos)}</strong>.<br><br>
-      <em>Estrategia: Para no erosionar tu saldo de caja, tus ingresos mensuales de cobranza orgánica deben superar los <strong>${fmt(totalSueldos + totalAnticipos + fijosTotal)}</strong>.</em>`;
-    }
-    // 8. FALLBACK / GENERAL RECOMMENDATIONS
-    else {
-      text = `<strong>Hola, soy tu Analista Financiero IA.</strong><br><br>
-      No he podido identificar una pregunta específica sobre sueldos, cuentas por cobrar, bancos o deudas. Sin embargo, puedo ayudarte con consultas en tiempo real sobre la contabilidad de <strong>Grafhika & GMD</strong>.<br><br>
-      <strong>Ejemplos de preguntas que puedes hacerme:</strong><br>
-      • <em>"¿Cuánto gastamos en sueldo este mes?"</em><br>
-      • <em>"¿Cuánto tenemos por cobrar los próximos 15 días?"</em><br>
-      • <em>"¿Cuáles son nuestros saldos en los bancos?"</em><br>
-      • <em>"¿Cuánto tenemos invertido en Fondos Mutuos?"</em><br>
-      • <em>"¿Cuáles son las deudas por créditos bancarios activos?"</em><br>
-      • <em>"¿Qué finiquitos tenemos pendientes de pago?"</em><br><br>
-      Prueba escribiendo alguna de ellas en la barra de consulta inferior.`;
-    }
-
-    if (errorMsg) {
-      text = `<div style="padding: 10px 14px; background: oklch(96% .04 70); border: 1px solid oklch(86% .08 70); border-radius: 8px; font-size: 11.5px; margin-bottom: 14px; color: oklch(45% .15 70); font-family: 'DM Sans', sans-serif;">⚠️ <strong>Modo offline temporal:</strong> No se pudo conectar a Gemini Flash (${errorMsg}). Respondiendo con el motor local offline.</div>${text}`;
-    }
-
-    return text;
-  };
-
-  const executeCustomQuery = (queryInput) => {
-    if (!queryInput.trim()) return;
-    setIsTyping(true);
-    setChatResponse(null);
-
-    const query = cleanText(queryInput);
-
-    // Call Gemini API if Key is present
-    if (apiKey.trim()) {
-      const systemPrompt = buildSystemPrompt();
-      const context = buildContext();
-      const prompt = `${systemPrompt}\n\nCONTEXTO FINANCIERO:\n${context}\n\nPREGUNTA DEL USUARIO:\n${queryInput}`;
-
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey.trim()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.15
-          }
-        })
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Error API (${res.status})`);
-        return res.json();
-      })
-      .then(data => {
-        setIsTyping(false);
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) {
-          let cleanReply = reply.trim();
-          if (cleanReply.startsWith("```html")) {
-            cleanReply = cleanReply.slice(7);
-          }
-          if (cleanReply.endsWith("```")) {
-            cleanReply = cleanReply.slice(0, -3);
-          }
-          setChatResponse(cleanReply);
-        } else {
-          throw new Error("Respuesta vacía o inválida");
-        }
-      })
-      .catch(err => {
-        console.error("Gemini Flash failed, running offline fallback:", err);
-        const fallbackText = runOfflineQuery(query, queryInput, err.message);
-        setIsTyping(false);
-        setChatResponse(fallbackText);
-      });
-
-      return;
-    }
-
-    // Si no hay API Key, ejecutar offline directamente
-    const text = runOfflineQuery(query, queryInput);
-    setTimeout(() => {
-      setIsTyping(false);
-      setChatResponse(text);
-    }, 600);
-  };
-
-  return (
-    <div className="page">
-      {/* Encabezado AI CFO */}
-      <div className="card ai-gradient-card mb">
-        <div style={{display:'flex',alignItems:'center',gap:16,padding:'10px 6px'}}>
-          <div className="ai-avatar-glowing"><svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6a6 6 0 0 0-6 6c0 3.31 2.69 6 6 6s6-2.69 6-6a6 6 0 0 0-6-6z"/></svg></div>
-          <div>
-            <div style={{fontFamily:'var(--font-headings)',fontWeight:700,fontSize:17,color:'#1e3a8a'}}>Informe CFO de Inteligencia Artificial</div>
-            <div style={{fontSize:12,color:'#475569',marginTop:3}}>Diagnóstico corporativo computado en tiempo real en base a balances, cobranza activa y compromisos de egresos</div>
-          </div>
-        </div>
-        <hr style={{border:'none',borderTop:'1px dashed rgba(37, 99, 235, 0.2)',margin:'14px 0'}}/>
-        <div className="ai-report-content">
-          <p>Estimado Director,</p>
-          <p>
-            El diagnóstico consolidado de tesorería para <strong>Grafhika & GMD</strong> revela una liquidez operativa en cuentas bancarias de <strong>{fmt(totalCaja)}</strong>, 
-            respaldada adicionalmente por un portafolio de inversiones en Fondos Mutuos que asciende a <strong>{fmt(totalInversiones)}</strong>. 
-            Al contrastar la caja operativa con una estructura mensual de egresos fijos (planilla de sueldos de <strong>{fmt(sueldosTotal)}</strong> y costos de planta de <strong>{fmt(fijosTotal)}</strong>), 
-            la empresa mantiene una cobertura operativa inmediata en sus cuentas corrientes de aproximadamente <strong>{runwayDias} días</strong> (ampliándose significativamente al considerar tus fondos de inversión liquidados).
-          </p>
-          <p>
-            El principal factor de riesgo identificado se encuentra en la cartera de cuentas por cobrar. Actualmente dispones de <strong>{fmt(cobranzaVencida)}</strong> en estado vencido. 
-            Nuestros modelos indican una concentración crítica de deuda: el cliente <strong>{maxDebtorName}</strong> adeuda un saldo vencido acumulado de <strong>{fmt(maxDebtorVal)}</strong>, 
-            lo que representa el <strong>{maxDebtorPercent.toFixed(1)}%</strong> de toda tu cartera de cobro activa. 
-            Se sugiere priorizar inmediatamente esta cobranza para extender la holgura de caja de la organización.
-          </p>
-        </div>
-      </div>
-
-      <div className="g11">
-        
-        {/* Alertas IA */}
-        <div className="card">
-          <div className="card-hd">
-            <div><div className="card-title">Alertas y Oportunidades Estratégicas</div><div className="card-sub">Hallazgos detectados automáticamente</div></div>
-          </div>
-          <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {maxDebtorPercent > 30 && (
-              <div className="ai-alert-item danger">
-                <div className="ai-alert-icon">⚠</div>
-                <div>
-                  <div className="ai-alert-title">Alta Concentración de Deuda Vencida</div>
-                  <div className="ai-alert-desc">El cliente {maxDebtorName} retiene el {maxDebtorPercent.toFixed(1)}% de tu cartera vencida total ({fmt(maxDebtorVal)}). Una mora prolongada afectará fuertemente tus flujos mensuales.</div>
-                </div>
-              </div>
-            )}
-            {runwayDias < 45 ? (
-              <div className="ai-alert-item warning">
-                <div className="ai-alert-icon">⏳</div>
-                <div>
-                  <div className="ai-alert-title">Runway de Caja Operativa Ajustado</div>
-                  <div className="ai-alert-desc">Tu caja cubre menos de 45 días de tu costo mínimo de operación. Recuerda que cuentas con {fmt(totalInversiones)} adicionales en Fondos Mutuos como respaldo de emergencia.</div>
-                </div>
-              </div>
-            ) : (
-              <div className="ai-alert-item success">
-                <div className="ai-alert-icon">✔</div>
-                <div>
-                  <div className="ai-alert-title">Excelente Holgura Operativa</div>
-                  <div className="ai-alert-desc">Tu liquidez actual te permite cubrir con creces sueldos consolidados y gastos fijos mínimos de operación por varios meses sin depender de nuevos cobros.</div>
-                </div>
-              </div>
-            )}
-            {totalInversiones > 0 && (
-              <div className="ai-alert-item success">
-                <div className="ai-alert-icon">💰</div>
-                <div>
-                  <div className="ai-alert-title">Reserva de Respaldo Sólida</div>
-                  <div className="ai-alert-desc">Tu portafolio en Fondos Mutuos de {fmt(totalInversiones)} es tu principal escudo financiero frente a shocks externos o contingencias comerciales.</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Consultas interactivas */}
-        <div className="card" style={{display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
-          <div>
-            <div className="card-hd" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}>
-              <div><div className="card-title">Consultas Financieras del Negocio</div><div className="card-sub">Haz clic, escribe tu pregunta o conecta Gemini Flash abajo</div></div>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <input 
-                  type={showApiKey ? "text" : "password"} 
-                  placeholder="Gemini API Key..."
-                  value={apiKey}
-                  onChange={(e)=>saveApiKey(e.target.value)}
-                  style={{
-                    padding:'4px 8px',
-                    borderRadius:5,
-                    border:'1px solid var(--border)',
-                    background:'var(--bg)',
-                    color:'var(--text)',
-                    fontFamily:'DM Sans',
-                    fontSize:11.5,
-                    width:140,
-                    outline:'none'
-                  }}
-                />
-                <button 
-                  onClick={()=>setShowApiKey(!showApiKey)}
-                  style={{
-                    background:'none',
-                    border:'none',
-                    cursor:'pointer',
-                    color:'var(--t3)',
-                    fontSize:12,
-                    display:'flex',
-                    alignItems:'center'
-                  }}
-                  title={showApiKey ? "Ocultar API Key" : "Mostrar API Key"}
-                >
-                  {showApiKey ? "👁️" : "🙈"}
-                </button>
-              </div>
-            </div>
-            <div style={{display:'flex',flexDirection:'column',gap:16}}>
-              <div className="ai-query-suggestions">
-                <button className="ai-query-tag" onClick={()=>executeCustomQuery('diagnostico')}>¿Cuál es el diagnóstico de salud financiera?</button>
-                <button className="ai-query-tag" onClick={()=>executeCustomQuery('riesgo-clientes')}>¿Qué clientes representan el mayor riesgo?</button>
-                <button className="ai-query-tag" onClick={()=>executeCustomQuery('runway-analisis')}>¿Cuál es el análisis de runway y egresos fijos?</button>
-                <button className="ai-query-tag" onClick={()=>executeCustomQuery('estrategia-90')}>¿Qué acciones estratégicas recomiendas?</button>
-              </div>
-
-              <div className="ai-chat-bubble">
-                <div style={{display:'flex',gap:12,alignItems:'start'}}>
-                  <div className="ai-avatar-glowing" style={{width:28,height:28,fontSize:'0.9rem'}}><svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6a6 6 0 0 0-6 6c0 3.31 2.69 6 6 6s6-2.69 6-6a6 6 0 0 0-6-6z"/></svg></div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:12.5,fontWeight:700,color:'var(--text)',marginBottom:4}}>Analista IA Financiero</div>
-                    {isTyping ? (
-                      <div style={{fontStyle:'italic',color:'var(--t3)',fontSize:12.5}}>Analizando libros contables...</div>
-                    ) : (
-                      <div style={{fontSize:12.5,color:'var(--t2)',lineHeight:1.5}} dangerouslySetInnerHTML={{__html: chatResponse || 'Escribe una pregunta abajo (ej: <em>¿cuánto gastamos en sueldo este mes?</em> o <em>¿cuánto tenemos por cobrar en 15 días?</em>) o haz clic en las sugerencias para iniciar.'}} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Formulario de Pregunta */}
-          <div style={{display:'flex',gap:10,marginTop:20,borderTop:'1px solid var(--border)',paddingTop:16}}>
-            <input 
-              type="text" 
-              placeholder="Pregunta a la IA (ej. ¿cuánto gastamos en sueldo este mes?)..."
-              value={pregunta}
-              onChange={(e)=>setPregunta(e.target.value)}
-              onKeyDown={(e)=>{if(e.key==='Enter') { executeCustomQuery(pregunta); setPregunta(''); }}}
-              style={{
-                flex:1,
-                padding:'10px 14px',
-                borderRadius:8,
-                border:'1px solid var(--border)',
-                background:'var(--bg)',
-                color:'var(--text)',
-                fontFamily:'DM Sans',
-                fontSize:13,
-                outline:'none'
-              }}
-            />
-            <button 
-              onClick={()=>{ executeCustomQuery(pregunta); setPregunta(''); }}
-              style={{
-                padding:'10px 18px',
-                borderRadius:8,
-                background:'var(--blue)',
-                color:'#fff',
-                border:'none',
-                fontWeight:600,
-                cursor:'pointer',
-                fontFamily:'DM Sans',
-                fontSize:13,
-                display:'flex',
-                alignItems:'center',
-                gap:6,
-                transition:'background 0.2s'
-              }}
-            >
-              <span>Preguntar</span>
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
 
 // ── Cloud Sync Page Component ──
 function CloudSyncPage({ isFirebaseConfigured, fbUser, fbLoading, onReinitFirebase, onGoogleLogin, onGoogleLogout, config, auditLogs }) {

@@ -2,7 +2,7 @@
 
 Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero.
 
-> Última actualización: 2026-06-19
+> Última actualización: 2026-08-17
 
 ---
 
@@ -31,18 +31,45 @@ https://docs.google.com/spreadsheets/d/e/2PACX-1vTj1EanSaF9L7EOt7uzJkaYM-4nSiJSe
 
 Se agrega `?gid=GID&output=csv` para cada pestaña:
 
-| Módulo       | GID          | Notas                                          |
-|--------------|--------------|------------------------------------------------|
-| Movimientos  | (principal)  | Primera hoja, sin GID extra                    |
-| Gastos       | 2058514573   |                                                |
-| Créditos     | 690377335    |                                                |
-| Finiquitos   | 1916149630   |                                                |
-| Cobranza     | 602912984    | Puede ser sobreescrita por carga manual Excel  |
-| Sueldos      | 998795265    | Contiene **dos tablas** (ver sección 5)         |
-| Gastos Fijos | 1222067969   |                                                |
+| Módulo        | GID          | Notas                                          |
+|---------------|--------------|------------------------------------------------|
+| Movimientos   | (principal)  | Primera hoja, sin GID extra                    |
+| Gastos        | 2058514573   |                                                |
+| Créditos      | 690377335    |                                                |
+| Finiquitos    | 1916149630   |                                                |
+| Facturas      | 602912984    | Ex-"Cobranza" (renombrada por el usuario, mismo GID). Puede ser sobreescrita por carga manual Excel; el detalle de facturas del SII también hace merge acá (ver más abajo) |
+| Sueldos       | 998795265    | Contiene **dos tablas** (ver sección 5)         |
+| Gastos Fijos  | 1222067969   |                                                |
+| compras       | 175442552    | **Nueva (2026-08)**. Detalle de compras del SII, publicado por `sii-dashboard` |
+| cuadre iva    | 707671342    | **Nueva (2026-08)**. IVA débito/crédito/determinado por empresa y período, publicado por `sii-dashboard` |
+| resumenes sii | 437226100    | **Nueva (2026-08)**. Resumen oficial por tipo de documento (`getResumen` del SII), publicado por `sii-dashboard` |
 
 - Hay caché de arranque en `localStorage` para minimizar el tiempo de carga inicial.
-- Los GIDs están definidos como constantes en `index.html` (`GID_SUELDOS`, etc.).
+- Los GIDs están definidos como constantes en `index.html` (`GID_SUELDOS`, `GID_RESUMENES_SII`, `GID_CUADRE_IVA`, etc.).
+
+### Integración con el SII — proyecto hermano `sii-dashboard`
+
+Las tres pestañas nuevas (`compras`, `cuadre iva`, `resumenes sii`) **no las llena una persona**: las escribe
+un proyecto Python separado, `C:\Users\brand\Desktop\Claude\sii-dashboard\` (fuera de este repo, fuera de
+OneDrive — se movió el 2026-08-17 porque OneDrive sincronizando un SQLite abierto en modo WAL es riesgo de
+corrupción). Usa el certificado digital de cada empresa para autenticarse contra el SII, baja el RCV (`getResumen`,
+2 llamadas por empresa y mes) y publica acá con una cuenta de servicio de Google
+(`google-sheets@chatbot-ia-467202.iam.gserviceaccount.com`).
+
+Correr una actualización manual:
+```bash
+cd "C:\Users\brand\Desktop\Claude\sii-dashboard"
+python ingest.py --resumenes --desde 2026-01
+```
+
+**Comportamiento importante para quien edite esto — `cuadre iva` y `resumenes sii` se REGENERAN COMPLETAS en
+cada corrida, no hacen merge.** Publicar filtrando por `--empresa` sin querer puede borrar a las demás empresas
+de esas dos pestañas (pasó una vez, el 2026-08-17; el script ahora se niega a hacerlo en silencio y avisa por
+consola, pero conviene saberlo). La pestaña **`Facturas` sí hace merge** por (empresa, tipo, folio) y respeta
+las columnas manuales (ESTADO, COMENTARIO COBRANZA, ABONOS) — pero al día de esta nota **solo tiene el detalle
+de julio 2026 cargado**; el resto de los meses solo están en el agregado de `cuadre iva`/`resumenes sii`, no
+documento por documento. Si se necesita el detalle completo actualizado, correr `ingest.py --desde 2026-01`
+(sin `--resumenes`) desde `sii-dashboard`.
 
 ---
 
@@ -91,9 +118,11 @@ service cloud.firestore {
 ## 4. Módulos y Páginas
 
 ### Orden del menú lateral (actual):
-`Movimientos → Proyección → Ventas → Fondos → Créditos → Finiquitos → Simulador → Analista IA → Nube Cloud → Accesos y Roles`
+`Movimientos → Proyección → Ventas → Fondos → Créditos → Finiquitos → Cuadre IVA → Simulador → Nube Cloud → Accesos y Roles`
 
-> **Movimientos** es la **página de inicio por defecto** (el módulo **Resumen/`home` fue eliminado** el 2026-06-19). **Simulador** fue movido debajo de **Finiquitos** el 2026-06-16.
+> **Movimientos** es la **página de inicio por defecto** (el módulo **Resumen/`home` fue eliminado** el 2026-06-19). **Simulador** fue movido debajo de **Finiquitos** el 2026-06-16. **Cuadre IVA** se agregó el 2026-08-17 entre Finiquitos y Simulador; **Analista IA** se eliminó ese mismo día.
+>
+> **Un módulo nuevo no aparece solo.** El Sidebar filtra por los `modulos` permitidos de cada usuario en Firestore (`allowed_users/{email}`) — un usuario creado antes de que existiera "Cuadre IVA" no lo va a ver hasta que un Administrador se lo habilite manualmente desde **Accesos y Roles** (el checkbox aparece solo porque `UsuariosPage` arma la grilla dinámicamente a partir de `navItems`, no hace falta tocar código para eso).
 
 ### Descripción de módulos:
 
@@ -107,7 +136,12 @@ service cloud.firestore {
 - **Simulador (sim)**: Gráfico de área con línea de déficit ($0). Switches para incluir/excluir: remuneraciones **(sueldos + anticipos)**, créditos, gastos fijos, finiquitos y gastos variables. Tabla con desglose transparente día a día o mes a mes.
   - **Plazo por defecto: 15 días (vista diaria)** (antes 12 meses).
   - **Fechas de pago en modo diario**: sueldos el **día 30** (fin de mes), anticipos el **día 15** (mitad de mes). En modo mensual ambos se agregan al mes correspondiente.
-- **Analista IA (ia)**: CFO virtual. Modo offline (NLP local) + modo online (Gemini 2.5 Flash con API Key). Runway usa `sueldosTotal + anticiposTotal + fijosTotal` en el denominador.
+- **Cuadre IVA (iva)** *(nuevo, 2026-08-17)*: componente `CuadreIvaPage`. Datos desde `CUADRE_IVA_DATA` y `RESUMENES_SII_DATA` (poblados por los GID `cuadre iva`/`resumenes sii`, ver sección 2). Filtro por empresa (chips: Todas / Grafhika SpA / Grupo Marketing Digital) que afecta las tres vistas. Tres pestañas internas:
+  - **IVA por Venta** *(pestaña por defecto — es la que más le importa al usuario)*: una tarjeta por empresa con el IVA débito generado por ventas, desglosado mes a mes con fila de total.
+  - **Cuadre IVA**: tabla completa por empresa y período — ventas, compras, IVA débito/crédito/determinado, resultado (pill "A pagar"/"Remanente"), y un badge de alerta si hay documentos en estado Pendiente (no cuentan para el impuesto todavía).
+  - **Resúmenes SII**: el mismo desglose por tipo de documento que muestra el portal del SII (`RESUMEN REGISTRO DE COMPRAS/VENTAS`), agrupado en tarjetas colapsables por empresa/período/operación.
+  - **Bloque destacado arriba de todo — "IVA del mes en curso"**: solo aparece si el período vigente coincide con el mes calendario real. Muestra el IVA determinado del mes por empresa, el vencimiento estimado del F29 (día 20 del mes siguiente a la declaración, corrido a lunes si cae fin de semana — **estimado**, no reemplaza confirmar en sii.cl) y un aviso de que la cifra es provisoria mientras el mes no cierre.
+- ~~**Analista IA (ia)**~~ — **ELIMINADO (2026-08-17)**, a pedido del usuario. Se quitó `AIAdvisorPage` completo (~800 líneas) junto con todo su estado: `apiKey`/`saveApiKey`, la lectura/escritura de `GEMINI_API_KEY` en `localStorage`, y su sincronización con Firestore (incluido el campo `geminiApiKey` que viajaba agregado a cada guardado de umbrales de alerta, sin relación funcional con esos umbrales). **Esto también resolvió el issue de seguridad pendiente**: la API key de Gemini que estaba hardcodeada como fallback público (`localStorage.getItem('GEMINI_API_KEY') || 'AIzaSy...'`) ya no existe en el código — no hace falta rotarla.
 - **Nube Cloud (cloud)**: Panel de configuración de Firebase/Firestore.
 - **Accesos y Roles (admin)**: Gestión de `allowed_users`, aprobación de solicitudes de acceso, audit log.
 
@@ -313,7 +347,21 @@ let ANTICIPOS_DATA = [];     // { empresa, personas, monto } — 2da tabla hoja 
 
 // ── Gastos ───────────────────────────────────────────────────────────────
 let GASTOS_FIJOS_DATA = [];  // { descripcion, monto, dia_pago, categoria }
+
+// ── IVA (SII, vía sii-dashboard) ────────────────────────────────────────
+let RESUMENES_SII_DATA = []; // { empresa, periodo, operacion, estado, cod, tipoDoc,
+                              //   docs, exento, neto, ivaRecuperable, ivaUsoComun,
+                              //   ivaNoRecuperable, total, factor }
+let CUADRE_IVA_DATA = [];    // { empresa, periodo, docsVenta, ventasNetas, ventasExentas,
+                              //   ivaDebito, ventasTotal, docsCompra, comprasNetas,
+                              //   comprasExentas, ivaCredito, comprasTotal, ivaNoRecuperable,
+                              //   otrosImpuestos, ivaDeterminado, resultado, ncVenta, ncCompra,
+                              //   docsPendientes, ivaPendiente }
 ```
+
+> `apiKey`/`saveApiKey`/`GEMINI_API_KEY` (Gemini, para Analista IA) **ya no existen** —
+> eliminados junto con el módulo el 2026-08-17. Si aparecen en un diff viejo o en un
+> backup, es del código anterior a esa fecha.
 
 ---
 
@@ -334,6 +382,9 @@ Dashboard financiero/
 ```
 
 > `app.js`, `dataProcessor.js` y `charts.js` son de una versión modular anterior. Se pueden eliminar sin consecuencias.
+
+> **Proyecto hermano** (fuera de esta carpeta): `C:\Users\brand\Desktop\Claude\sii-dashboard\` — descarga el RCV
+> del SII y publica las pestañas `compras`, `cuadre iva` y `resumenes sii` que lee este dashboard. Ver sección 2.
 
 ---
 
@@ -363,6 +414,28 @@ Dashboard financiero/
 ---
 
 ## 11. Historial de Cambios
+
+### 2026-08-17 — Módulo Cuadre IVA + eliminación de Analista IA
+- **Nuevo módulo "Cuadre IVA" (`iva`)**, entre Finiquitos y Simulador. Conectado al proyecto hermano
+  `sii-dashboard`, que descarga los resúmenes oficiales del RCV del SII (`getResumen`) para Grafhika SpA y
+  Grupo Marketing Digital y publica 3 pestañas nuevas en esta misma planilla (`compras`, `cuadre iva`,
+  `resumenes sii` — ver sección 2). Componente `CuadreIvaPage`, tres vistas internas (IVA por Venta / Cuadre
+  IVA / Resúmenes SII) más un bloque destacado de "IVA del mes en curso" con vencimiento estimado del F29.
+  Ver sección 4 para el detalle completo.
+- **Un usuario nuevo módulo no aparece solo**: hay que habilitarlo por cuenta en Accesos y Roles — la barra
+  lateral se arma según los `modulos` permitidos en Firestore, y un usuario existente no lo tiene marcado por
+  default. No es un bug, es el mismo mecanismo de siempre.
+- **Módulo "Analista IA" (`ia`) eliminado** por pedido del usuario — `AIAdvisorPage` completo (~800 líneas)
+  más todo su estado (`apiKey`, `saveApiKey`, sync de `GEMINI_API_KEY` con Firestore). Efecto colateral
+  positivo: la API key de Gemini que estaba hardcodeada como fallback público ya no existe en el código.
+- **Bug encontrado y corregido en `sii-dashboard`** (no en este `index.html`, pero afecta los datos que lee):
+  publicar el cuadre filtrando por `--empresa` sobreescribía las pestañas `cuadre iva`/`resumenes sii`
+  completas, borrando a las demás empresas (esas pestañas se regeneran enteras en cada corrida, no hacen
+  merge). Corregido para que la publicación siempre incluya todas las empresas, sin importar qué se haya
+  filtrado para mostrar en consola.
+- Verificado en vivo contra `localhost:3000` (Babel compila sin errores, `AIAdvisorPage` ausente,
+  `CuadreIvaPage` presente, datos con los conteos esperados) y los montos de Grafhika contrastados campo por
+  campo contra capturas reales del portal del SII (compras y ventas de agosto) — coincidencia exacta.
 
 ### 2026-06-19 — Ajustes de módulos y Simulador
 - **Módulo Resumen (`home`) eliminado.** Ya no aparece en el menú. **Movimientos** es la nueva página de inicio. Fallbacks/página por defecto cambiados de `'home'` a `'mov'`; si un usuario tenía `'home'` guardado en `localStorage`, se redirige a Movimientos. El botón **"Subir Nómina"** se movió de la barra de Resumen a la de **Proyección**. (commit `1c25568`)
@@ -406,6 +479,8 @@ Dashboard financiero/
 | 3 | Baja | Pendiente | Remote URL del repo local en minúsculas funciona por redirect. Para normalizar: `git remote set-url origin https://github.com/brands-chile-afk/Dashboard-financiero.git`. |
 | 4 | Baja | Opcional | **Nivel 2 de rendimiento (pre-compilar Babel):** quitar Babel del navegador compilando el JSX una sola vez bajaría la carga de ~6.5s a ~2s. Contra: cada edición futura pasa por un paso de compilación (idealmente vía GitHub Action). Ver sección 14. |
 | ~~5~~ | ~~Baja~~ | ✅ **RESUELTO** | ~~Timeout recurrente `saveConfigToCloud`~~ — era síntoma del bucle infinito de Firebase, resuelto el 2026-06-18 (commit `2b96dd5`). |
+| 6 | Media | Pendiente | `Facturas`/`compras` (detalle documento por documento) solo tienen **julio 2026** cargado — el resto del año solo está en el agregado (`cuadre iva`/`resumenes sii`). Correr `ingest.py --desde 2026-01` (sin `--resumenes`) desde `sii-dashboard` cuando se necesite el detalle completo. |
+| 7 | Baja | Sin investigar | Hay archivos sueltos sin trackear en el repo que **no vienen de este proyecto**: `SII/Envy.txt` (vacío), `add_admin.html`, `scratch_firebase_test.js`, `test_compat.js`, `test_sdk.js`, `test_write.html`. Preexistentes, no se tocaron ni se incluyeron en ningún commit — confirmar con el usuario si sirven para algo antes de borrarlos. |
 
 ---
 
