@@ -2,7 +2,7 @@
 
 Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero.
 
-> Última actualización: 2026-08-17
+> Última actualización: 2026-08-18
 
 ---
 
@@ -136,11 +136,12 @@ service cloud.firestore {
 - **Simulador (sim)**: Gráfico de área con línea de déficit ($0). Switches para incluir/excluir: remuneraciones **(sueldos + anticipos)**, créditos, gastos fijos, finiquitos y gastos variables. Tabla con desglose transparente día a día o mes a mes.
   - **Plazo por defecto: 15 días (vista diaria)** (antes 12 meses).
   - **Fechas de pago en modo diario**: sueldos el **día 30** (fin de mes), anticipos el **día 15** (mitad de mes). En modo mensual ambos se agregan al mes correspondiente.
-- **Cuadre IVA (iva)** *(nuevo, 2026-08-17)*: componente `CuadreIvaPage`. Datos desde `CUADRE_IVA_DATA` y `RESUMENES_SII_DATA` (poblados por los GID `cuadre iva`/`resumenes sii`, ver sección 2). Filtro por empresa (chips: Todas / Grafhika SpA / Grupo Marketing Digital) que afecta las tres vistas. Tres pestañas internas:
-  - **IVA por Venta** *(pestaña por defecto — es la que más le importa al usuario)*: una tarjeta por empresa con el IVA débito generado por ventas, desglosado mes a mes con fila de total.
-  - **Cuadre IVA**: tabla completa por empresa y período — ventas, compras, IVA débito/crédito/determinado, resultado (pill "A pagar"/"Remanente"), y un badge de alerta si hay documentos en estado Pendiente (no cuentan para el impuesto todavía).
-  - **Resúmenes SII**: el mismo desglose por tipo de documento que muestra el portal del SII (`RESUMEN REGISTRO DE COMPRAS/VENTAS`), agrupado en tarjetas colapsables por empresa/período/operación.
-  - **Bloque destacado arriba de todo — "IVA del mes en curso"**: solo aparece si el período vigente coincide con el mes calendario real. Muestra el IVA determinado del mes por empresa, el vencimiento estimado del F29 (día 20 del mes siguiente a la declaración, corrido a lunes si cae fin de semana — **estimado**, no reemplaza confirmar en sii.cl) y un aviso de que la cifra es provisoria mientras el mes no cierre.
+- **Cuadre IVA (iva)** *(nuevo, 2026-08-17; simplificado 2026-08-18)*: componente `CuadreIvaPage` (función completa, ~130 líneas — reemplazó una primera versión de ~320 líneas con pestañas, KPIs y una tarjeta destacada que el usuario encontró recargada; ver sección 11 para el porqué del cambio). Diseño actual, deliberadamente mínimo:
+  - **Dos selectores arriba, en una sola tarjeta**: `<select>` de **Empresa** (todas las que aparecen en `CUADRE_IVA_DATA`) y `<select>` de **Período** (todos los períodos disponibles, más reciente primero). Estilo de los `<select>` copiado literal de `selStyle`/`inputStyle` de `MovimientosTable` (línea ~838) para que se vea igual al resto de la app, no un componente nuevo con su propio estilo.
+  - **Selección inicial**: empresa = la primera alfabéticamente; período = el mes calendario actual si existe en los datos (`new Date()` comparado como `AAAAMM` contra `CUADRE_IVA_DATA`), si no el último período cargado.
+  - **A la derecha de los selectores**, alineado a la derecha: el IVA determinado de esa empresa y período — label "IVA A PAGAR" o "REMANENTE" según el signo, tomado de `CUADRE_IVA_DATA` (no de las tablas de abajo).
+  - **Dos tarjetas debajo — "Ventas" y "Compras"** — cada una con una tabla que reproduce el formato exacto del propio portal del SII (el usuario adjuntó una captura de esa pantalla como referencia): columnas Tipo Documento / Total Documentos / Monto Exento / Monto Neto / **Monto IVA** (Ventas) o **IVA Recuperable** (Compras) / Monto Total, con fila de **Total** al pie. Datos desde `RESUMENES_SII_DATA` filtrado por `empresa`, `periodo` y **`estado === 'REGISTRO'` únicamente** — los documentos en estado Pendiente no se muestran acá (no cuentan para el impuesto; ver sección 2 y el README de `sii-dashboard` para la regla completa). Si no hay documentos para la combinación elegida, cada tabla muestra "Sin documentos registrados en este período." en vez de quedar vacía sin explicación.
+  - Se sacaron por completo: los chips de filtro, la grilla de 4 KPIs, la tarjeta destacada "IVA del mes en curso" con el vencimiento del F29, y las pestañas "IVA por Venta"/"Resúmenes SII" agrupadas en tarjetas colapsables. Toda esa información sigue disponible en las pestañas `cuadre iva` y `resumenes sii` de la propia planilla de Google Sheets para quien la necesite con más detalle — el módulo del dashboard ahora prioriza la lectura rápida sobre la exhaustividad.
 - ~~**Analista IA (ia)**~~ — **ELIMINADO (2026-08-17)**, a pedido del usuario. Se quitó `AIAdvisorPage` completo (~800 líneas) junto con todo su estado: `apiKey`/`saveApiKey`, la lectura/escritura de `GEMINI_API_KEY` en `localStorage`, y su sincronización con Firestore (incluido el campo `geminiApiKey` que viajaba agregado a cada guardado de umbrales de alerta, sin relación funcional con esos umbrales). **Esto también resolvió el issue de seguridad pendiente**: la API key de Gemini que estaba hardcodeada como fallback público (`localStorage.getItem('GEMINI_API_KEY') || 'AIzaSy...'`) ya no existe en el código — no hace falta rotarla.
 - **Nube Cloud (cloud)**: Panel de configuración de Firebase/Firestore.
 - **Accesos y Roles (admin)**: Gestión de `allowed_users`, aprobación de solicitudes de acceso, audit log.
@@ -409,11 +410,179 @@ Dashboard financiero/
 | `142bff4` | Consolidar documentacion en un solo .md actualizado                          |
 | `4d9e93a` | Agregar anticipos (2da tabla SUELDOS) y corregir total de nomina             |
 
-> Todos los cambios listados están **commiteados, pusheados y desplegados en vivo** en GitHub Pages.
+> Los commits de esta tabla (hasta `7f92ec7`) están desplegados. El commit `61c64ac` (módulo Cuadre IVA +
+> quitar Analista IA, ver Historial) también está pusheado y en vivo — ver sección 11 para el detalle de cómo
+> se destrabó su despliegue. **La simplificación del módulo Cuadre IVA del 2026-08-18 (ver Historial) todavía
+> NO está commiteada** — vive solo en el `index.html` local. Antes de tocar este módulo de nuevo, correr
+> `git status` para confirmar si sigue así o si ya se subió.
 
 ---
 
 ## 11. Historial de Cambios
+
+### 2026-08-18 (4) — Alerta de vencimiento F29 (IVA) en la barra superior
+
+**Pedido del usuario**: después de agregar "Todas las Empresas", pidió que además se avisara "el
+IVA a pagar ese mes" — eligió que fuera una **alerta arriba de todo**, con el mismo formato que las
+alertas de pago existentes (ej. "Pago X vence en 2 días"), no un texto dentro del propio módulo
+Cuadre IVA.
+
+**Qué se hizo** — nuevo bloque en `useAlerts` (`index.html` ~línea 2892), mismo patrón que las
+alertas de créditos/gastos (ventana de **0, 1 o 2 días** antes de vencer):
+- Vencimiento del F29 estimado como **el día 12 del mes**. Si hoy es después del día 12, el próximo
+  vencimiento es el 12 del mes siguiente.
+- El **período que se declara** en ese vencimiento es el mes calendario anterior al mes del
+  vencimiento (ej.: vencimiento 12-sep declara el período de agosto). Incluye manejo correcto del
+  cambio de año (vencimiento 12-ene declara diciembre del año anterior).
+- Por cada empresa con `CUADRE_IVA_DATA` para ese período, agrega una alerta: `crit` (rojo) si hay
+  IVA a pagar, `warn` (ámbar) si es remanente — mismo criterio de color que ya usa el número grande
+  de Cuadre IVA. Mensaje: `⚠ F29 {empresa} vence {HOY|mañana|en 2 días} — {IVA a pagar|Remanente}
+  {monto}`.
+- `useAlerts` recibe ahora un tercer parámetro `ivaVersion` (el mismo contador agregado en el fix de
+  más abajo) como dependencia del `useMemo`, para que la alerta aparezca apenas `CUADRE_IVA_DATA`
+  termine de cargar — sin esto, la alerta se hubiera calculado una sola vez con el array todavía
+  vacío y nunca se hubiera actualizado (el mismo bug de fondo que el de la sección siguiente).
+
+**Cómo se verificó**: hoy es 18-08-2026 y el próximo F29 vence 12-sep-2026 (faltan ~25 días), fuera
+de la ventana de 0-2 días — por diseño, no se ve ninguna alerta todavía (se confirmó que no rompe
+nada y no aparece nada raro). Para probar el cálculo sin esperar al 10 de septiembre, se simuló la
+misma lógica en la consola del navegador con `hoy = 10-sep-2026`: generó correctamente
+`F29 Grafhika SpA vence en 2 días — Remanente $1.454.541` y `F29 Grupo Marketing Digital vence en 2
+días — IVA a pagar $1.128.233` — los mismos montos ya validados contra el portal del SII.
+
+**Pendiente**: tampoco commiteado.
+
+---
+
+### 2026-08-18 (3) — Opción "Todas las Empresas" en Cuadre IVA
+
+**Pedido del usuario**: agregar una vista consolidada además de poder elegir Grafhika SpA o Grupo
+Marketing Digital por separado.
+
+**Qué se hizo**: nueva opción **"Todas las Empresas"** al principio del `<select>` de Empresa
+(constante `IVA_TODAS_EMPRESAS = '__todas__'`, `index.html` ~línea 3527). Al elegirla:
+- Las tablas de Ventas y Compras suman **por tipo de documento** los datos de ambas empresas
+  (`mergeByTipoDoc` agrupa las filas de `RESUMENES_SII_DATA` de todas las empresas del período por
+  `tipoDoc` y suma `docs/exento/neto/ivaRecuperable/ivaUsoComun/ivaNoRecuperable/total`) — si las dos
+  empresas tienen "Factura Electrónica", aparece **una sola fila** con el total combinado, no dos
+  filas separadas.
+- El número grande de "IVA a Pagar / Remanente" arriba a la derecha suma el `ivaDeterminado` de
+  `CUADRE_IVA_DATA` de todas las empresas del período (antes usaba `.find()` para una sola empresa;
+  ahora es `.filter()` + `reduce()`, funciona igual para el caso de una sola empresa).
+- El comportamiento por empresa individual (Grafhika SpA / Grupo Marketing Digital) no cambió — la
+  opción "Todas" es un tercer valor posible, no reemplaza a las otras dos. La selección por defecto
+  al entrar al módulo sigue siendo la primera empresa alfabéticamente, no "Todas".
+
+**Verificado**: con Chrome real conectado, se comparó Grupo Marketing Digital solo (37 docs venta,
+82 docs compra, agosto 2026) + Grafhika SpA solo (2 docs venta, 37 docs compra) contra "Todas las
+Empresas" (39 docs venta, 119 docs compra) — coincide exactamente (37+2=39, 82+37=119), igual que
+los montos. Sin errores en consola.
+
+**Pendiente**: tampoco commiteado — se suma a los cambios de más abajo.
+
+---
+
+### 2026-08-18 (2) — Bug corregido: el módulo Cuadre IVA se quedaba pegado en "Sin datos"
+
+**Síntoma reportado por el usuario**: entrando a `localhost:3000`, el módulo Cuadre IVA mostraba
+"Sin datos de IVA todavía" (o las tablas Ventas/Compras vacías con "Sin documentos registrados en
+este período") aunque los datos sí estaban publicados en la planilla. Cambiar de módulo y volver a
+Cuadre IVA arreglaba la vista — la pista de que no era un problema de datos sino de render.
+
+**Causa raíz — dos bugs apilados**, encontrados reproduciendo en vivo con DevTools/React Fiber (no
+alcanzaba con leer el código, el filtro parecía correcto a simple vista):
+
+1. **Timing**: `loadLiveData` hace sus fetches **secuencialmente** con `await`; el de `cuadre iva`/
+   `resumenes sii` es de los últimos y tarda ~7-8s en total. Hay un timeout de seguridad
+   (`index.html` ~línea 4900) que fuerza `setDataLoaded(true)` a los 4s "por si el fetch cuelga" —
+   dispara antes de que esos dos fetches terminen. Cuando terminan de verdad, vuelven a llamar
+   `setDataLoaded(true)`, pero como el estado ya era `true`, React no vuelve a renderizar nada.
+2. **Estado inicial mal capturado (el bug de fondo)**: `CuadreIvaPage` arranca con
+   `useState(empresas[0] || '')` y un `periodoInicial` calculados a partir de `CUADRE_IVA_DATA`. Si
+   el componente monta antes de que ese fetch resuelva (muy probable, por el bug 1), `empresas` es
+   `[]` en ese instante → `empresaSel` queda **pegado en `''` para siempre**, porque `useState` solo
+   usa su valor inicial en el primer render. El `<select>` de Empresa se ve con "Grafhika SpA"
+   marcado igual (el navegador muestra la primera `<option>` cuando el `value` controlado no
+   matchea ninguna), así que visualmente no se nota nada raro — pero el filtro
+   `r.empresa === empresaSel` nunca matchea nada porque compara contra `''`. Confirmado
+   inspeccionando el fiber de React en vivo: `memoizedState` de `empresaSel` era `""` mientras el
+   `<select>` mostraba "Grafhika SpA" seleccionado.
+
+**Por qué "cambiar de módulo y volver" lo arreglaba**: eso desmonta `CuadreIvaPage` por completo y
+la vuelve a montar — para ese momento `CUADRE_IVA_DATA` ya había llegado, así que el `useState`
+inicializa bien. Pero nada obligaba a eso a pasar solo: si el usuario entraba directo al módulo, se
+quedaba pegado sin ningún indicio de error en consola.
+
+**Fix aplicado** (`index.html`):
+- Nuevo estado `ivaVersion` en `App` (mismo patrón que `cobVersion` para Cobranza — un contador que
+  no se lee, solo se incrementa para forzar re-render). Se bumpea justo después de poblar
+  `CUADRE_IVA_DATA` y `RESUMENES_SII_DATA` en `loadLiveData`, así el segundo `setDataLoaded(true)`
+  (que no hace nada porque el valor no cambió) ya no es el único intento de refrescar la pantalla.
+- Dos `useEffect` nuevos en `CuadreIvaPage` que resincronizan `empresaSel`/`periodoSel` apenas
+  `empresas`/`periodosDisponibles` dejan de estar vacíos o la selección actual deja de ser válida —
+  en vez de depender de que el `useState` haya adivinado bien al primer render.
+
+**Cómo se verificó**: con Chrome real (extensión conectada, sesión ya logueada como
+`brandon.villarroelcl@gmail.com`), se reprodujo el bug en vivo (mismo síntoma exacto que reportó el
+usuario), se inspeccionó el fiber de React para confirmar `empresaSel===""` como causa, se aplicó el
+fix, y se recargó la página **dos veces seguidas** entrando directo al módulo sin tocar nada — ambas
+veces mostró los datos reales de Grafhika SpA / Agosto 2026 (Ventas $1.984.810, Compras
+$13.644.041) sin quedarse pegado. Sin errores nuevos en consola.
+
+**Pendiente**: este fix **tampoco está commiteado todavía** — se suma a la simplificación del
+2026-08-18 de más abajo, que ya estaba pendiente de commit. Antes de commitear, correr
+`git status` para confirmar qué cambios de `index.html` se van a incluir.
+
+---
+
+### 2026-08-18 — Simplificación del módulo Cuadre IVA
+
+**Por qué**: la primera versión (ver entrada del 2026-08-17, abajo) tenía tabs, una grilla de 4 KPIs y una
+tarjeta destacada de "IVA del mes en curso" con vencimiento del F29. El usuario la vio en vivo y pidió algo
+más simple, adjuntando una captura de la propia pantalla del SII (Registro de Compras y Ventas → resumen por
+tipo de documento) como referencia de lo que quería: dos tablas limpias, una para Ventas y otra para Compras,
+sin nada más alrededor.
+
+**Qué se hizo**: se reemplazó la función `CuadreIvaPage` completa (pasó de ~320 líneas a ~130). Diseño nuevo,
+descrito con detalle en la sección 4 — en resumen: dos `<select>` (Empresa, Período) en una sola tarjeta, con
+el IVA determinado del período a la derecha, y dos tarjetas debajo ("Ventas", "Compras") con una tabla cada
+una que reproduce columna por columna el formato de la captura del SII. Se sacaron los tabs, los KPIs, los
+chips de filtro y la tarjeta de vencimiento del F29 — toda esa información más detallada sigue disponible en
+las pestañas de Google Sheets (`cuadre iva`, `resumenes sii`) para quien la necesite, pero ya no vive en el
+dashboard.
+
+**Detalle técnico para quien retome esto**:
+- Los `<select>` reusan el mismo objeto de estilo que `MovimientosTable` (`selStyle`/`inputStyle`, línea
+  ~838 de `index.html`) — no se inventó un estilo nuevo, para que se sienta parte de la misma app.
+- Las tablas filtran `RESUMENES_SII_DATA` por `estado === 'REGISTRO'` explícitamente: los documentos
+  Pendientes no aparecen ahí (no cuentan para el impuesto — ver sección 2). Si en algún momento se quiere
+  mostrarlos igual (por ejemplo con un badge), hay que decidirlo a propósito, no es el comportamiento actual.
+- El IVA determinado que se muestra arriba a la derecha sale de `CUADRE_IVA_DATA`, **no** de sumar las dos
+  tablas de abajo — son dos fuentes distintas (`cuadre iva` vs `resumenes sii`, dos pestañas separadas de la
+  planilla) que en teoría siempre deberían coincidir, pero si alguna vez no coinciden, es una pista de que
+  algo se desincronizó entre esas dos pestañas al publicar desde `sii-dashboard`.
+- El label "Total" del pie de tabla iguala en negrita a la fila de datos; si `filas.length === 0` se muestra
+  "Sin documentos registrados en este período." en vez de una tabla vacía sin explicación.
+
+**Cómo se verificó** — con una complicación real en el camino: justo al probar en vivo, `docs.google.com`
+empezó a dar timeout de lectura (confirmado también fuera del navegador, con `requests` de Python directo
+desde la máquina — no era un problema del navegador ni de este código: `google.com` y `github.com` respondían
+normal, ese dominio puntual no). Como esto bloquea la carga de datos de **todo** el dashboard, no solo de
+este módulo, se verificó sin depender de la red: se inyectaron manualmente valores sintéticos (con las
+mismas cifras reales de Grafhika/GMD ya validadas contra el portal del SII en sesiones anteriores) en
+`window.CUADRE_IVA_DATA` y `window.RESUMENES_SII_DATA` desde la consola del navegador, se montó
+`CuadreIvaPage` en un `<div>` aparte con `ReactDOM.createRoot`, y se confirmó: sin errores de Babel/React,
+las columnas y la fila de Total coinciden con la captura de referencia, cambiar el `<select>` de empresa
+recalcula el IVA determinado al instante (probado cambiando de Grafhika a GMD), y el estado vacío aparece
+correctamente cuando no hay datos para la combinación elegida. La red se recuperó sola minutos después.
+
+**Pendiente**: este cambio **no está commiteado todavía** (ver nota al final de la sección 10). El commit
+anterior (`61c64ac`, con la versión compleja del módulo) ya está pusheado y en vivo en GitHub Pages — así que
+ahora mismo el sitio publicado muestra una versión de Cuadre IVA distinta a la que hay en el `index.html`
+local. Si se entra a `localhost:3000` se ve la versión simple (esta); si se entra al sitio de GitHub Pages,
+todavía se ve la versión con tabs y KPIs, hasta que se commitee y pushee este cambio.
+
+---
 
 ### 2026-08-17 — Módulo Cuadre IVA + eliminación de Analista IA
 - **Nuevo módulo "Cuadre IVA" (`iva`)**, entre Finiquitos y Simulador. Conectado al proyecto hermano

@@ -2889,7 +2889,7 @@ const DEFAULT_UMBRALES = {
   'BCI': 0,
 };
 
-function useAlerts(saldos, umbrales) {
+function useAlerts(saldos, umbrales, ivaVersion) {
   return useMemo(() => {
     const alerts = [];
     const hoy = new Date();
@@ -2931,8 +2931,29 @@ function useAlerts(saldos, umbrales) {
       });
     }
 
+    // Alerta de F29 (IVA): vence el día 12 del mes siguiente al período declarado.
+    // Si ya pasó el día 12 de este mes, el próximo vencimiento es el 12 del mes que viene
+    // y declara el IVA del mes en curso; si no, vence este mes 12 y declara el mes anterior.
+    if (CUADRE_IVA_DATA.length) {
+      let vencMes = hoy.getMonth(), vencAnio = hoy.getFullYear();
+      if (hoy.getDate() > 12) { vencMes++; if (vencMes > 11) { vencMes = 0; vencAnio++; } }
+      const fechaVencF29 = new Date(vencAnio, vencMes, 12);
+      const diasF29 = Math.round((fechaVencF29 - hoy) / 86400000);
+      if (diasF29 >= 0 && diasF29 <= 2) {
+        let perMes = vencMes - 1, perAnio = vencAnio;
+        if (perMes < 0) { perMes = 11; perAnio--; }
+        const periodoDeclarar = `${perAnio}${String(perMes+1).padStart(2,'0')}`;
+        const diasLabel = diasF29 === 0 ? 'HOY' : diasF29 === 1 ? 'mañana' : 'en 2 días';
+        CUADRE_IVA_DATA.filter(c => c.periodo === periodoDeclarar).forEach(c => {
+          const esRemanente = c.ivaDeterminado < 0;
+          alerts.push({ id: 'iva_'+c.empresa+'_'+periodoDeclarar, tipo: esRemanente ? 'warn' : 'crit', banco: '',
+            msg: `⚠ F29 ${c.empresa} vence ${diasLabel} — ${esRemanente ? 'Remanente' : 'IVA a pagar'} ${fmt(Math.abs(c.ivaDeterminado))}` });
+        });
+      }
+    }
+
     return alerts;
-  }, [saldos, umbrales]);
+  }, [saldos, umbrales, ivaVersion]);
 }
 
 function AlertStrip({ alerts, onClose }) {
@@ -3524,11 +3545,39 @@ function UploadVentasPanel({ onImport, onClose }) {
 }
 
 // ── Cuadre de IVA (SII) ───────────────────────────────────────────────────
+const IVA_TODAS_EMPRESAS = '__todas__';
+
 function CuadreIvaPage() {
-  const [tab, setTab] = useState('porventa');
-  const [empresaFiltro, setEmpresaFiltro] = useState('todas');
-  const MESES_IVA = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const empresas = [...new Set(CUADRE_IVA_DATA.map(r => r.empresa))].sort();
+  const periodosDisponibles = [...new Set(CUADRE_IVA_DATA.map(r => r.periodo))].sort();
+
+  const hoy = new Date();
+  const periodoHoy = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  const periodoInicial = periodosDisponibles.includes(periodoHoy)
+    ? periodoHoy
+    : periodosDisponibles[periodosDisponibles.length-1];
+
+  const [empresaSel, setEmpresaSel] = useState(empresas[0] || '');
+  const [periodoSel, setPeriodoSel] = useState(periodoInicial);
+
+  // Empresa/Período se inicializan al montar; si CUADRE_IVA_DATA todavía no había llegado en ese
+  // momento (fetch lento a Google Sheets), quedan pegados en '' / undefined para siempre porque
+  // useState solo usa su valor inicial una vez. Este efecto los corrige apenas los datos llegan.
+  useEffect(() => {
+    if (!empresaSel && empresas.length) setEmpresaSel(empresas[0]);
+  }, [empresas.join(',')]);
+  useEffect(() => {
+    if (periodosDisponibles.length && !periodosDisponibles.includes(periodoSel)) setPeriodoSel(periodoInicial);
+  }, [periodosDisponibles.join(',')]);
+
+  const MESES_IVA = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const pLabel = p => (p && p.length === 6) ? `${MESES_IVA[+p.slice(4,6)]} ${p.slice(0,4)}` : (p || '');
+
+  const selEstilo = {
+    padding:'6px 10px', fontSize:12.5, border:'1px solid var(--border)',
+    borderRadius:7, background:'var(--bg)', color:'var(--text)', cursor:'pointer',
+    fontFamily:'inherit',
+  };
 
   if (!CUADRE_IVA_DATA.length) {
     return (
@@ -3541,312 +3590,118 @@ function CuadreIvaPage() {
     );
   }
 
-  const empresas = [...new Set(CUADRE_IVA_DATA.map(r => r.empresa))].sort();
-  const cuadreFiltrado = CUADRE_IVA_DATA
-    .filter(r => empresaFiltro === 'todas' || r.empresa === empresaFiltro)
-    .sort((a,b) => (a.empresa+a.periodo).localeCompare(b.empresa+b.periodo));
-  const resFiltrado = RESUMENES_SII_DATA.filter(r => empresaFiltro === 'todas' || r.empresa === empresaFiltro);
+  const esTodas = empresaSel === IVA_TODAS_EMPRESAS;
 
-  const totDeb = cuadreFiltrado.reduce((s,r)=>s+r.ivaDebito,0);
-  const totCre = cuadreFiltrado.reduce((s,r)=>s+r.ivaCredito,0);
-  const totDet = cuadreFiltrado.reduce((s,r)=>s+r.ivaDeterminado,0);
-  const totDocsV = cuadreFiltrado.reduce((s,r)=>s+r.docsVenta,0);
-  const totDocsC = cuadreFiltrado.reduce((s,r)=>s+r.docsCompra,0);
-  const totPendIva = cuadreFiltrado.reduce((s,r)=>s+r.ivaPendiente,0);
+  const filasPeriodo = RESUMENES_SII_DATA.filter(r =>
+    (esTodas || r.empresa === empresaSel) && r.periodo === periodoSel && r.estado === 'REGISTRO'
+  );
+  // "Todas las Empresas" trae una fila por empresa+tipoDoc — se suman por tipoDoc para no duplicar filas.
+  const mergeByTipoDoc = (filas) => {
+    const porTipo = {};
+    filas.forEach(r => {
+      if (!porTipo[r.tipoDoc]) { porTipo[r.tipoDoc] = { ...r }; return; }
+      const m = porTipo[r.tipoDoc];
+      m.docs += r.docs; m.exento += r.exento; m.neto += r.neto;
+      m.ivaRecuperable += r.ivaRecuperable; m.ivaUsoComun += r.ivaUsoComun;
+      m.ivaNoRecuperable += r.ivaNoRecuperable; m.total += r.total;
+    });
+    return Object.values(porTipo);
+  };
+  const ventas = mergeByTipoDoc(filasPeriodo.filter(r => r.operacion === 'VENTA'));
+  const compras = mergeByTipoDoc(filasPeriodo.filter(r => r.operacion === 'COMPRA'));
+  const cuadresPeriodo = CUADRE_IVA_DATA.filter(r => (esTodas || r.empresa === empresaSel) && r.periodo === periodoSel);
+  const cuadre = cuadresPeriodo.length
+    ? { ivaDeterminado: cuadresPeriodo.reduce((s,r) => s + r.ivaDeterminado, 0) }
+    : null;
 
-  // ── IVA del mes en curso: lo que se declara y paga en el F29 siguiente ──
-  const hoy = new Date();
-  const periodoHoy = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}`;
-  const periodosDisponibles = [...new Set(CUADRE_IVA_DATA.map(r=>r.periodo))].sort();
-  const periodoVigente = periodosDisponibles.includes(periodoHoy) ? periodoHoy : periodosDisponibles[periodosDisponibles.length-1];
-  const esMesEnCurso = periodoVigente === periodoHoy;
-  const filasMesVigente = CUADRE_IVA_DATA
-    .filter(r => r.periodo===periodoVigente && (empresaFiltro==='todas' || r.empresa===empresaFiltro))
-    .sort((a,b)=>a.empresa.localeCompare(b.empresa));
-  const totalDetVigente = filasMesVigente.reduce((s,r)=>s+r.ivaDeterminado,0);
-  // Vencimiento estimado: día 20 del mes siguiente (declaración y pago electrónico).
-  // El día 12 aplica sin pago electrónico; feriados y el tipo de contribuyente pueden correrlo — verificar en sii.cl.
-  const anioPeriodoVig = +periodoVigente.slice(0,4), mesPeriodoVig = +periodoVigente.slice(4,6);
-  const vencEstimado = new Date(anioPeriodoVig, mesPeriodoVig, 20);
-  const diaSemanaVenc = vencEstimado.getDay();
-  if (diaSemanaVenc===6) vencEstimado.setDate(vencEstimado.getDate()+2);
-  else if (diaSemanaVenc===0) vencEstimado.setDate(vencEstimado.getDate()+1);
-  const vencTexto = vencEstimado.toLocaleDateString('es-CL',{day:'numeric',month:'long',year:'numeric'});
-  const mesDeclaraLabel = vencEstimado.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
-
-  const grupos = {};
-  resFiltrado.forEach(r => {
-    const k = r.empresa+'|'+r.periodo+'|'+r.operacion;
-    (grupos[k] = grupos[k] || []).push(r);
-  });
-  const groupKeys = Object.keys(grupos).sort((a,b) => {
-    const [ea,pa,oa] = a.split('|'), [eb,pb,ob] = b.split('|');
-    if (ea !== eb) return ea.localeCompare(eb);
-    if (pa !== pb) return pa.localeCompare(pb);
-    return oa === 'VENTA' ? -1 : 1;
-  });
+  const Tabla = ({ titulo, filas, colIva }) => {
+    const totDocs = filas.reduce((s,r) => s + r.docs, 0);
+    const totExe  = filas.reduce((s,r) => s + r.exento, 0);
+    const totNeto = filas.reduce((s,r) => s + r.neto, 0);
+    const totIva  = filas.reduce((s,r) => s + r.ivaRecuperable + r.ivaUsoComun, 0);
+    const totTot  = filas.reduce((s,r) => s + r.total, 0);
+    return (
+      <div className="card" style={{marginBottom:14}}>
+        <div className="card-hd"><div className="card-title">{titulo}</div></div>
+        {filas.length === 0 ? (
+          <div style={{padding:'24px 4px',color:'var(--t3)',fontSize:13,textAlign:'center'}}>
+            Sin documentos registrados en este período.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Tipo Documento</th>
+                <th className="r">Total Documentos</th>
+                <th className="r">Monto Exento</th>
+                <th className="r">Monto Neto</th>
+                <th className="r">{colIva}</th>
+                <th className="r">Monto Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((r,i) => (
+                <tr key={i}>
+                  <td>{r.tipoDoc}</td>
+                  <td className="r mono">{r.docs}</td>
+                  <td className="r mono">{fmt(r.exento)}</td>
+                  <td className="r mono">{fmt(r.neto)}</td>
+                  <td className="r mono">{fmt(r.ivaRecuperable + r.ivaUsoComun)}</td>
+                  <td className="r mono">{fmt(r.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{borderTop:'2px solid var(--border)'}}>
+                <td style={{fontWeight:700}}>Total</td>
+                <td className="r mono" style={{fontWeight:700}}>{totDocs}</td>
+                <td className="r mono" style={{fontWeight:700}}>{fmt(totExe)}</td>
+                <td className="r mono" style={{fontWeight:700}}>{fmt(totNeto)}</td>
+                <td className="r mono" style={{fontWeight:700}}>{fmt(totIva)}</td>
+                <td className="r mono" style={{fontWeight:700}}>{fmt(totTot)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="page">
 
-      {filasMesVigente.length > 0 && (
-        <div className="card" style={{marginBottom:14,border:'1px solid var(--amber)',background:'var(--amber-bg)'}}>
-          <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:14}}>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <div style={{width:38,height:38,minWidth:38,borderRadius:10,background:'#fff',display:'flex',alignItems:'center',justifyContent:'center',color:'oklch(50% .17 75)'}}>
-                <IC n="not" s={18}/>
-              </div>
-              <div>
-                <div style={{fontSize:14,fontWeight:700}}>IVA de {pLabel(periodoVigente)}{esMesEnCurso ? ' — mes en curso' : ''}</div>
-                <div style={{fontSize:12,color:'var(--t2)'}}>Se declara y paga en el F29 de {mesDeclaraLabel} · vencimiento estimado {vencTexto}</div>
-              </div>
+      <div className="card" style={{marginBottom:14,display:'flex',flexWrap:'wrap',alignItems:'center',gap:20}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:12,color:'var(--t3)',fontWeight:600}}>Empresa</span>
+          <select style={selEstilo} value={empresaSel} onChange={e=>setEmpresaSel(e.target.value)}>
+            <option value={IVA_TODAS_EMPRESAS}>Todas las Empresas</option>
+            {empresas.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:12,color:'var(--t3)',fontWeight:600}}>Período</span>
+          <select style={selEstilo} value={periodoSel} onChange={e=>setPeriodoSel(e.target.value)}>
+            {periodosDisponibles.slice().reverse().map(p => <option key={p} value={p}>{pLabel(p)}</option>)}
+          </select>
+        </div>
+        {cuadre && (
+          <div style={{marginLeft:'auto',textAlign:'right'}}>
+            <div style={{fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',color:'var(--t3)'}}>
+              {cuadre.ivaDeterminado < 0 ? 'Remanente' : 'IVA a Pagar'}
             </div>
-            <div style={{textAlign:'right'}}>
-              <div style={{fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--t2)'}}>
-                {totalDetVigente<0 ? 'Remanente a favor (grupo)' : 'Total a pagar (grupo)'}
-              </div>
-              <div style={{fontSize:30,fontWeight:700,lineHeight:1,color: totalDetVigente<0 ? 'var(--g600)' : 'oklch(45% .17 75)'}}>
-                {fmt(Math.abs(totalDetVigente))}
-              </div>
+            <div className="mono" style={{fontSize:22,fontWeight:700,color: cuadre.ivaDeterminado<0 ? 'var(--g600)' : 'oklch(50% .17 75)'}}>
+              {fmt(Math.abs(cuadre.ivaDeterminado))}
             </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:`repeat(${filasMesVigente.length},1fr)`,gap:10}}>
-            {filasMesVigente.map(r => (
-              <div key={r.empresa} style={{background:'#fff',borderRadius:9,padding:'10px 14px',border:'1px solid var(--border)'}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-                  <div style={{fontSize:12.5,fontWeight:600}}>{r.empresa}</div>
-                  <span className={`pill ${r.resultado==='A pagar'?'a':'g'}`}>{r.resultado}</span>
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--t2)'}}>
-                  <span>Débito {fmt(r.ivaDebito)}</span><span>Crédito {fmt(r.ivaCredito)}</span>
-                </div>
-                <div className="mono" style={{fontSize:18,fontWeight:700,marginTop:4,color:r.ivaDeterminado<0?'var(--g600)':'oklch(45% .17 75)'}}>
-                  {fmt(Math.abs(r.ivaDeterminado))}
-                </div>
-                {r.docsPendientes>0 && (
-                  <div style={{fontSize:10.5,color:'var(--red)',marginTop:4}}>
-                    ⚠ {r.docsPendientes} doc. pendiente(s) · {fmt(r.ivaPendiente)} de IVA sin incluir
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {esMesEnCurso && (
-            <div style={{marginTop:12,fontSize:11.5,color:'var(--t2)',background:'rgba(255,255,255,.65)',borderRadius:7,padding:'8px 12px'}}>
-              ⚠ {pLabel(periodoVigente)} sigue en curso: este monto es provisorio y va a seguir cambiando a medida que se
-              emitan más facturas y lleguen más compras hasta el cierre del mes. No es la cifra final del F29 — actualizá
-              corriendo <code style={{background:'var(--bg)',padding:'1px 5px',borderRadius:4}}>ingest.py --resumenes</code> más
-              cerca de fin de mes.
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="kpi-grid" style={{marginBottom:14}}>
-        <div className="kcard">
-          <div className="kcard-icon g"><IC n="iva" s={15}/></div>
-          <div className="kcard-label">IVA Débito</div>
-          <div className="kcard-val">{fmt(totDeb)}</div>
-          <div className="kcard-change neu"><span className="sub">{totDocsV} docs. de venta</span></div>
-        </div>
-        <div className="kcard">
-          <div className="kcard-icon g"><IC n="iva" s={15}/></div>
-          <div className="kcard-label">IVA Crédito</div>
-          <div className="kcard-val">{fmt(totCre)}</div>
-          <div className="kcard-change neu"><span className="sub">{totDocsC} docs. de compra</span></div>
-        </div>
-        <div className="kcard" style={{borderColor: totDet<0 ? 'var(--g400)' : 'var(--amber)'}}>
-          <div className={`kcard-icon ${totDet<0?'g':'a'}`}><IC n="iva" s={15}/></div>
-          <div className="kcard-label">IVA Determinado</div>
-          <div className="kcard-val" style={{color: totDet<0?'var(--g600)':'oklch(50% .17 75)'}}>{fmt(Math.abs(totDet))}</div>
-          <div className="kcard-change neu"><span className="sub">{totDet<0?'Remanente a favor':'A pagar'}</span></div>
-        </div>
-        <div className="kcard">
-          <div className="kcard-icon b"><IC n="cre" s={15}/></div>
-          <div className="kcard-label">Empresas · Períodos</div>
-          <div className="kcard-val">{empresas.length} · {new Set(cuadreFiltrado.map(r=>r.periodo)).size}</div>
-          <div className="kcard-change neu"><span className="sub">{totPendIva>0 ? `${fmt(totPendIva)} IVA pendiente` : 'sin documentos pendientes'}</span></div>
-        </div>
+        )}
       </div>
 
-      <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:14}}>
-        <div className="tabs" style={{marginBottom:0}}>
-          <button className={`tab ${tab==='porventa'?'act':''}`} onClick={()=>setTab('porventa')}>IVA por Venta</button>
-          <button className={`tab ${tab==='cuadre'?'act':''}`} onClick={()=>setTab('cuadre')}>Cuadre IVA</button>
-          <button className={`tab ${tab==='resumenes'?'act':''}`} onClick={()=>setTab('resumenes')}>Resúmenes SII</button>
-        </div>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          <span style={{fontSize:12,color:'var(--t3)'}}>Empresa</span>
-          {['todas',...empresas].map(e => (
-            <button key={e} onClick={()=>setEmpresaFiltro(e)} style={{
-              fontSize:12.5,padding:'5px 12px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',
-              border:`1px solid ${empresaFiltro===e?'var(--g600)':'var(--border)'}`,
-              background:empresaFiltro===e?'var(--g600)':'var(--surface)',
-              color:empresaFiltro===e?'#fff':'var(--t2)',
-            }}>{e==='todas'?'Todas':e}</button>
-          ))}
-        </div>
-      </div>
-
-      {tab==='porventa' && (
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
-          {(empresaFiltro==='todas' ? empresas : [empresaFiltro]).map(emp => {
-            const filas = CUADRE_IVA_DATA.filter(r=>r.empresa===emp).sort((a,b)=>a.periodo.localeCompare(b.periodo));
-            if (!filas.length) return null;
-            const totDebitoEmp = filas.reduce((s,r)=>s+r.ivaDebito,0);
-            const totNetoEmp = filas.reduce((s,r)=>s+r.ventasNetas,0);
-            const totVentaTotalEmp = filas.reduce((s,r)=>s+r.ventasTotal,0);
-            const totDocsEmp = filas.reduce((s,r)=>s+r.docsVenta,0);
-            return (
-              <div className="card" key={emp}>
-                <div className="card-hd" style={{alignItems:'center'}}>
-                  <div>
-                    <div className="card-title">{emp}</div>
-                    <div className="card-sub">IVA débito generado por ventas · {pLabel(filas[0].periodo)} – {pLabel(filas[filas.length-1].periodo)} · {totDocsEmp} documentos</div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',color:'var(--t3)',marginBottom:2}}>IVA débito del período</div>
-                    <div style={{fontSize:26,fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(totDebitoEmp)}</div>
-                  </div>
-                </div>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Período</th><th className="r">Ventas Netas</th><th className="r">Ventas Exentas</th>
-                      <th className="r">Ventas Total</th><th className="r">IVA Débito</th><th className="r">Docs.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filas.map((r,i) => (
-                      <tr key={i}>
-                        <td>{pLabel(r.periodo)}</td>
-                        <td className="r mono">{fmt(r.ventasNetas)}</td>
-                        <td className="r mono">{r.ventasExentas ? fmt(r.ventasExentas) : <span style={{color:'var(--t3)'}}>—</span>}</td>
-                        <td className="r mono">{fmt(r.ventasTotal)}</td>
-                        <td className="r mono" style={{fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(r.ivaDebito)}</td>
-                        <td className="r mono">{r.docsVenta}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{borderTop:'2px solid var(--border)'}}>
-                      <td style={{fontWeight:700}}>Total</td>
-                      <td className="r mono" style={{fontWeight:700}}>{fmt(totNetoEmp)}</td>
-                      <td className="r mono"></td>
-                      <td className="r mono" style={{fontWeight:700}}>{fmt(totVentaTotalEmp)}</td>
-                      <td className="r mono" style={{fontWeight:700,color:'oklch(50% .17 75)'}}>{fmt(totDebitoEmp)}</td>
-                      <td className="r mono" style={{fontWeight:700}}>{totDocsEmp}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tab==='cuadre' && (
-        <div className="card" style={{overflowX:'auto'}}>
-          <div className="card-hd">
-            <div>
-              <div className="card-title">Cuadre de IVA por empresa y período</div>
-              <div className="card-sub">Solo documentos en estado Registro determinan el impuesto</div>
-            </div>
-          </div>
-          <table className="tbl" style={{minWidth:920}}>
-            <thead>
-              <tr>
-                <th>Empresa</th><th>Período</th>
-                <th className="r">IVA Débito</th><th className="r">IVA Crédito</th>
-                <th className="r">No Recup.</th><th className="r">Otros Imp.</th>
-                <th className="r">IVA Determinado</th><th>Resultado</th><th className="r">Pendientes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cuadreFiltrado.map((r,i) => (
-                <tr key={i}>
-                  <td style={{fontWeight:600}}>{r.empresa}</td>
-                  <td>{pLabel(r.periodo)}</td>
-                  <td className="r mono">{fmt(r.ivaDebito)}</td>
-                  <td className="r mono">{fmt(r.ivaCredito)}</td>
-                  <td className="r mono">{r.ivaNoRecuperable ? fmt(r.ivaNoRecuperable) : <span style={{color:'var(--t3)'}}>—</span>}</td>
-                  <td className="r mono">{r.otrosImpuestos ? fmt(r.otrosImpuestos) : <span style={{color:'var(--t3)'}}>—</span>}</td>
-                  <td className="r mono" style={{fontWeight:700,color:r.ivaDeterminado<0?'var(--g600)':'oklch(50% .17 75)'}}>{fmt(r.ivaDeterminado)}</td>
-                  <td><span className={`pill ${r.resultado==='A pagar'?'a':'g'}`}>{r.resultado}</span></td>
-                  <td className="r">
-                    {r.docsPendientes>0
-                      ? <span className="pill r" title={`${fmt(r.ivaPendiente)} de IVA sin incluir en el crédito`}>{r.docsPendientes}</span>
-                      : <span style={{color:'var(--t3)'}}>—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab==='resumenes' && (
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          {groupKeys.map(k => {
-            const [emp,per,op] = k.split('|');
-            const rows = grupos[k];
-            const gDocs = rows.reduce((s,r)=>s+r.docs,0);
-            const gNeto = rows.reduce((s,r)=>s+r.neto,0);
-            const gIva = rows.reduce((s,r)=>s+r.ivaRecuperable+r.ivaUsoComun+r.ivaNoRecuperable,0);
-            const gTotal = rows.reduce((s,r)=>s+r.total,0);
-            return (
-              <div className="card" key={k} style={{padding:0,overflow:'hidden'}}>
-                <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:10,padding:'14px 18px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <span className={`pill ${op==='VENTA'?'g':'a'}`}>{op==='VENTA'?'Ventas':'Compras'}</span>
-                    <span style={{fontWeight:600,fontSize:13.5}}>{emp}</span>
-                    <span style={{color:'var(--t3)',fontSize:12.5}}>{pLabel(per)}</span>
-                  </div>
-                  <div className="mono" style={{display:'flex',gap:16,fontSize:12.5,color:'var(--t2)'}}>
-                    <span>{gDocs} docs</span>
-                    <span style={{color:'var(--t3)'}}>neto {fmt(gNeto)}</span>
-                    <span style={{fontWeight:700,color:'var(--text)'}}>IVA {fmt(gIva)}</span>
-                    <span style={{color:'var(--t3)'}}>total {fmt(gTotal)}</span>
-                  </div>
-                </div>
-                <table className="tbl" style={{borderTop:'1px solid var(--border)'}}>
-                  <thead>
-                    <tr>
-                      <th style={{paddingLeft:18}}>Tipo de documento</th>
-                      <th className="r">Docs.</th><th className="r">Exento</th><th className="r">Neto</th>
-                      <th className="r">IVA Recup.</th><th className="r">IVA Uso Común</th><th className="r">IVA No Recup.</th>
-                      <th className="r" style={{paddingRight:18}}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r,i) => (
-                      <tr key={i}>
-                        <td style={{paddingLeft:18}}>
-                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:'var(--t3)',background:'var(--bg)',borderRadius:4,padding:'1px 6px',marginRight:8}}>{r.cod}</span>
-                          {r.tipoDoc}
-                          {r.estado!=='REGISTRO' && <span className="pill a" style={{marginLeft:8,fontSize:10}}>{r.estado}</span>}
-                        </td>
-                        <td className="r mono">{r.docs}</td>
-                        <td className="r mono">{fmt(r.exento)}</td>
-                        <td className="r mono">{fmt(r.neto)}</td>
-                        <td className="r mono">{fmt(r.ivaRecuperable)}</td>
-                        <td className="r mono">{r.ivaUsoComun ? fmt(r.ivaUsoComun) : <span style={{color:'var(--t3)'}}>—</span>}</td>
-                        <td className="r mono">{r.ivaNoRecuperable ? fmt(r.ivaNoRecuperable) : <span style={{color:'var(--t3)'}}>—</span>}</td>
-                        <td className="r mono" style={{fontWeight:600,paddingRight:18}}>{fmt(r.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <Tabla titulo="Ventas" filas={ventas} colIva="Monto IVA" />
+      <Tabla titulo="Compras" filas={compras} colIva="IVA Recuperable" />
 
     </div>
   );
 }
-
 // ── Home Page ──────────────────────────────────────────────────────────────
 function HomePage({ saldos, movByMonth, gastos, ventas, creditos, fondos, alerts, onNavTo }) {
   const totalBancario = Object.values(saldos).reduce((a,b)=>a+b,0);
@@ -4522,6 +4377,7 @@ function App() {
   const [movRecientes, setMovRecientes] = useState(MOV_RECIENTES);
   const [movByMonth, setMovByMonth] = useState(MOV_BY_MONTH);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [ivaVersion, setIvaVersion] = useState(0);
   const [showAlertCfg, setShowAlertCfg] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadVentas, setShowUploadVentas] = useState(false);
@@ -5069,8 +4925,8 @@ function App() {
         if(GID_GASTOS_FIJOS){try{var gfTxt=await fetch(BASE+'?gid='+GID_GASTOS_FIJOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var gfRows=parseCSV(gfTxt).slice(1).filter(function(r){return r[0];});GASTOS_FIJOS_DATA=gfRows.map(function(r){return{descripcion:r[0]||'',monto:cn(r[1]),dia_pago:parseInt(r[2])||30,categoria:r[3]||'Fijo'};}).filter(function(r){return r.descripcion&&r.monto>0;});console.log('✅ GASTOS FIJOS cargados:',GASTOS_FIJOS_DATA.length,'ítems');}catch(e){console.warn('GASTOS_FIJOS no disponibles:',e.message);}}
         if(GID_FINIQUITOS){try{var finTxt=await fetch(BASE+'?gid='+GID_FINIQUITOS+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var finRows=parseCSV(finTxt).slice(1).filter(function(r){return r[0];});FINIQUITOS_RAW=finRows.map(function(r){return{nombre:r[0]||'',fecha:toISO(r[1]),tipo:r[2]||'',montoTotal:Math.abs(cn(r[3])),montoPago:Math.abs(cn(r[4])),estado:r[5]||'',comentario:r[6]||''};});console.log('✅ FINIQUITOS cargados:',FINIQUITOS_RAW.length,'registros');}catch(e){console.warn('FINIQUITOS no disponibles:',e.message);}}
         // ── CUADRE DE IVA (SII) desde Google Sheets ───────────────────────────
-        if(GID_CUADRE_IVA){try{var civTxt=await fetch(BASE+'?gid='+GID_CUADRE_IVA+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var civRows=parseCSV(civTxt).slice(1).filter(function(r){return r[0];});CUADRE_IVA_DATA=civRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',docsVenta:cn(r[2]),ventasNetas:cn(r[3]),ventasExentas:cn(r[4]),ivaDebito:cn(r[5]),ventasTotal:cn(r[6]),docsCompra:cn(r[7]),comprasNetas:cn(r[8]),comprasExentas:cn(r[9]),ivaCredito:cn(r[10]),comprasTotal:cn(r[11]),ivaNoRecuperable:cn(r[12]),otrosImpuestos:cn(r[13]),ivaDeterminado:cn(r[14]),resultado:r[15]||'',ncVenta:cn(r[16]),ncCompra:cn(r[17]),docsPendientes:cn(r[18]),ivaPendiente:cn(r[19])};});console.log('✅ CUADRE IVA cargado:',CUADRE_IVA_DATA.length,'filas');}catch(e){console.warn('CUADRE_IVA no disponible:',e.message);}}
-        if(GID_RESUMENES_SII){try{var resSiiTxt=await fetch(BASE+'?gid='+GID_RESUMENES_SII+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var resSiiRows=parseCSV(resSiiTxt).slice(1).filter(function(r){return r[0];});RESUMENES_SII_DATA=resSiiRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',operacion:r[2]||'',estado:r[3]||'',cod:r[4]||'',tipoDoc:r[5]||'',docs:cn(r[6]),exento:cn(r[7]),neto:cn(r[8]),ivaRecuperable:cn(r[9]),ivaUsoComun:cn(r[10]),ivaNoRecuperable:cn(r[11]),total:cn(r[12]),factor:parseFloat(String(r[13]||'1').replace(',','.'))||1};});console.log('✅ RESÚMENES SII cargados:',RESUMENES_SII_DATA.length,'filas');}catch(e){console.warn('RESUMENES_SII no disponible:',e.message);}}
+        if(GID_CUADRE_IVA){try{var civTxt=await fetch(BASE+'?gid='+GID_CUADRE_IVA+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var civRows=parseCSV(civTxt).slice(1).filter(function(r){return r[0];});CUADRE_IVA_DATA=civRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',docsVenta:cn(r[2]),ventasNetas:cn(r[3]),ventasExentas:cn(r[4]),ivaDebito:cn(r[5]),ventasTotal:cn(r[6]),docsCompra:cn(r[7]),comprasNetas:cn(r[8]),comprasExentas:cn(r[9]),ivaCredito:cn(r[10]),comprasTotal:cn(r[11]),ivaNoRecuperable:cn(r[12]),otrosImpuestos:cn(r[13]),ivaDeterminado:cn(r[14]),resultado:r[15]||'',ncVenta:cn(r[16]),ncCompra:cn(r[17]),docsPendientes:cn(r[18]),ivaPendiente:cn(r[19])};});console.log('✅ CUADRE IVA cargado:',CUADRE_IVA_DATA.length,'filas');setIvaVersion(function(v){return v+1;});}catch(e){console.warn('CUADRE_IVA no disponible:',e.message);}}
+        if(GID_RESUMENES_SII){try{var resSiiTxt=await fetch(BASE+'?gid='+GID_RESUMENES_SII+'&single=true&output=csv&t='+t).then(function(r){return r.text();});var resSiiRows=parseCSV(resSiiTxt).slice(1).filter(function(r){return r[0];});RESUMENES_SII_DATA=resSiiRows.map(function(r){return{empresa:r[0]||'',periodo:r[1]||'',operacion:r[2]||'',estado:r[3]||'',cod:r[4]||'',tipoDoc:r[5]||'',docs:cn(r[6]),exento:cn(r[7]),neto:cn(r[8]),ivaRecuperable:cn(r[9]),ivaUsoComun:cn(r[10]),ivaNoRecuperable:cn(r[11]),total:cn(r[12]),factor:parseFloat(String(r[13]||'1').replace(',','.'))||1};});console.log('✅ RESÚMENES SII cargados:',RESUMENES_SII_DATA.length,'filas');setIvaVersion(function(v){return v+1;});}catch(e){console.warn('RESUMENES_SII no disponible:',e.message);}}
         // ── COBRANZA MANUAL (override desde Firestore, compartido entre cuentas) ──
         // Si hay una carga manual guardada en la nube, tiene prioridad sobre Google Sheets.
         try{
@@ -5100,7 +4956,7 @@ function App() {
   const nav=(p)=>{setActive(p);localStorage.setItem('fdash_page',p);};
   const toggleCol=()=>{const n=!col;setCol(n);localStorage.setItem('fdash_col',n?'1':'0');};
 
-  const allAlerts = useAlerts(saldos, umbrales);
+  const allAlerts = useAlerts(saldos, umbrales, ivaVersion);
   const visibleAlerts = allAlerts.filter(a => !dismissedAlerts.includes(a.id));
   const dismissAlert = (id) => setDismissedAlerts(prev=>[...prev,id]);
 
