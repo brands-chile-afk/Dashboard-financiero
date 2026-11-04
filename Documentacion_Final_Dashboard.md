@@ -1,8 +1,57 @@
-# Documentación del Proyecto: Dashboard Financiero (Grafhika & GMD)
+# Documentación del Proyecto: Dashboard Financiero (Grafhika, GMD, Inversiones Santo Domingo & Editorial Patitas de Papel)
 
-Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero.
+Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero. **Para una sesión nueva (Claude Cowork, otro chat, celular) empezar por la sección 0.**
 
-> Última actualización: 2026-08-18
+> Última actualización: 2026-11-04
+
+---
+
+## 0. 🚀 Guía rápida para una sesión nueva (Claude Cowork / celular / chat nuevo)
+
+**Qué es:** un dashboard web (React en un único `index.html`, publicado en GitHub Pages) que lee en vivo el Google Sheet **"Base movimientos"**. Ese Sheet lo llenan dos sistemas independientes:
+1. **El VPS** (bancos: movimientos y saldos) → se documenta en **`N8n, openclaw\01 - Documentacion\OPENCLAW_VPS_2026-06-16.md`**.
+2. **`sii-dashboard`** (IVA y Registro de Compras y Ventas del SII, `C:\Users\brand\Desktop\Claude\sii-dashboard\`) → ver sección 2 de este documento.
+
+**Dónde está:** sitio publicado `https://brands-chile-afk.github.io/Dashboard-financiero/` · repo `brands-chile-afk/Dashboard-financiero` (rama `main`) · copia local `C:\Users\brand\Desktop\Claude\Dashboard financiero` (`node server.js` → `http://localhost:3000`).
+
+**Estado al 2026-10-05:**
+
+| Pieza | Estado |
+|---|---|
+| Sitio publicado | ✅ responde (HTTP 200) |
+| Bancos (VPS → Sheet) | ⚠️ ver el documento del VPS: el programador de n8n se colgó el 28-sep y se reinició el 05-oct (falta confirmar que dispare solo); Scotiabank va manual por Taildrop por el CAPTCHA |
+| **IVA / SII (tarea semanal)** | ❌ **Falló en la última corrida** (vie 02-oct, resultado 1) y también el 11-sep. En la del 02-oct la causa visible es que el SII responde `codRespuesta=3` para el período `202610` (mes recién iniciado, varias empresas aún sin documentos) y el script, por diseño, **no publica nada si algo queda incompleto**. Resultado: el Sheet `cuadre iva` solo llega hasta `202609` y el módulo Cuadre IVA no muestra octubre. **No está corregido todavía.** El log tampoco registra corridas el 18 ni el 25-sep |
+| Cobranza (subida manual de Excel) | ⚠️ no persiste: la regla de Firestore `shared_data` sigue sin publicarse (verificado 05-oct: `403`). Hay que volver a subir el Excel cada vez. Los pasos están en la sección 7 |
+| Git | Local y publicado coinciden en `f0fec0f`, pero hay **cambios sin commitear**: `index.html` (3 líneas, solo quita BICE de valores de respaldo; cosmético) y este `.md` |
+
+**Acceso:** editar el código o correr la tarea del SII requiere estar **en el PC de Brandon** (la tarea vive en su Windows Task Scheduler y el proyecto `sii-dashboard` es local, fuera de OneDrive a propósito). Una sesión sin acceso a ese PC (por ejemplo la app del celular o una sesión en la nube) **solo puede orientar**: no ve los archivos ni puede ejecutar nada.
+
+**Chequeo en 1 minuto** (PowerShell, en el PC de Brandon):
+```powershell
+cd "C:\Users\brand\Desktop\Claude\Dashboard financiero"
+git status --short; git log --oneline -3
+curl.exe -s -o NUL -w "sitio: %{http_code}`n" https://brands-chile-afk.github.io/Dashboard-financiero/
+Get-ScheduledTask -TaskName "SII Dashboard - Actualizar IVA semanal" | Get-ScheduledTaskInfo | Select-Object LastRunTime,LastTaskResult,NextRunTime   # LastTaskResult 0 = OK
+Get-Content "C:\Users\brand\Desktop\Claude\sii-dashboard\logs\actualizacion.log" -Tail 30 -Encoding UTF8
+```
+Forzar una actualización del IVA a mano: `cd "C:\Users\brand\Desktop\Claude\sii-dashboard"` y `python ingest.py --resumenes --meses 2` (es idempotente: reintentar no duplica nada).
+
+**Reglas y decisiones ya tomadas (respetarlas):**
+1. **`index.html` es toda la app** (~8.000 líneas, más de 500 KB): no leerlo entero; buscar con `Grep` y leer por tramos.
+2. **Probar con caché limpio** (localStorage vacío) antes de subir cualquier cambio que toque la carga inicial: un bug por datos aún no cargados dejó la pantalla en blanco en producción (2026-06-19).
+3. **Antes de publicar, verificar el contenido en vivo**, no solo que GitHub Pages diga "built": el build puede demorar varios minutos o fallar el job de deploy aunque el commit esté bien (reintentar con "Re-run failed jobs").
+4. **`cuadre iva` y `resumenes sii` se regeneran completas en cada corrida.** Nunca publicar filtrando por `--empresa` sin cuidado: ya borró a las demás empresas una vez (ver sección 2).
+5. **No tocar sin preguntar** los archivos sueltos sin trackear: `add_admin.html`, `scratch_firebase_test.js`, `test_compat.js`, `test_sdk.js`, `test_write.html` y la carpeta `SII/`.
+6. **Credenciales y certificados:** los `.pfx` están en `C:\Users\brand\Desktop\Claude\` y sus contraseñas en el `.env` del proyecto del scraper bancario (`SII_CERT_PASSWORD_*`). Nunca mostrarlas ni pegarlas en un chat o documento. La config pública de Firebase dentro de `index.html` es pública por diseño; la seguridad real son las reglas de Firestore.
+7. **Subir cambios (commit/push) o publicar reglas de Firestore es decisión de Brandon:** pedir confirmación antes.
+8. **Trampas de este PC:** `python3 -c "..."` multilínea con comillas falla en la consola de Windows (escribir un `.py` y ejecutarlo), y la consola usa cp1252, así que imprimir emojis/Unicode desde Python puede romper un script (usar `PYTHONIOENCODING=utf-8`).
+9. **Simulación mensual de IVA para gerencia:** seguir el procedimiento de la sección 15. Antes de sumar un "supuesto de venta externa nueva", preguntar si ese monto ya está en la facturación real (ya hubo una doble contabilización de $11,4M).
+
+**Pendientes (por prioridad):**
+1. **Arreglar la tarea semanal del SII:** decidir cómo tratar `codRespuesta=3` en un mes recién iniciado (que cuente como "sin documentos" en vez de "consulta fallida") para que no bloquee la publicación de todas las empresas.
+2. **Publicar las reglas de Firestore** `shared_data` (cobranza persistente) y `completed_tasks` (ambas dan `403`); lo hace Brandon en Firebase Console (sección 7).
+3. **Commit y push** de lo pendiente (BICE en valores de respaldo + este `.md`), con confirmación de Brandon.
+4. Cargar el detalle completo de `Facturas`/`compras` (hoy solo tiene julio 2026; ver issue 6).
 
 ---
 
@@ -56,10 +105,34 @@ corrupción). Usa el certificado digital de cada empresa para autenticarse contr
 2 llamadas por empresa y mes) y publica acá con una cuenta de servicio de Google
 (`google-sheets@chatbot-ia-467202.iam.gserviceaccount.com`).
 
-Correr una actualización manual:
+**Cuatro empresas configuradas en `sii-dashboard/config.json`** (ver sección 11, 2026-08-28 y 2026-08-31):
+
+| Empresa | RUT | Certificado | Estado |
+|---|---|---|---|
+| Grafhika SpA | 77925991-9 | `Certificado ecert brandon.pfx` | Activa, con datos reales |
+| Grupo Marketing Digital | 77694185-9 | `Certificado E-Certchile BRIAN.pfx` | Activa, con datos reales |
+| Inversiones Santo Domingo | 78402779-1 | `Certificado ecert brandon.pfx` (mismo que Grafhika) | **Activa** (`activa: true` en `config.json`; verificado 2026-10-05) — estuvo pausada del 08-31 por no tener actividad; hoy tiene datos reales (sept-2026: IVA débito $1.627.455, crédito $1.631.679) |
+| Editorial Patitas de Papel | 78204998-4 | `Certificado ecert brandon.pfx` (mismo que Grafhika) | Activa, con datos reales desde enero 2026 |
+
+> **(Nota histórica, ya no vigente al 2026-10-05: Inversiones Santo Domingo fue reactivada y hoy tiene actividad.)** Texto original del 2026-08-31 — **Inversiones Santo Domingo no tiene actividad real en el RCV todavía** — el certificado autentica bien
+> (`--probar-token` OK), pero `getResumen` rechaza todos los períodos con `codRespuesta=3` (no es un problema
+> de autorización, esa empresa simplemente no factura electrónicamente / no tiene movimientos). Por eso quedó
+> con `"activa": false` desde el 2026-08-31 — mientras esté pausada, no bloquea la publicación de las demás
+> (antes, si UNA empresa fallaba, el script se negaba a publicar el cuadre de nadie). Reactivar cuando empiece
+> a facturar.
+>
+> **Editorial Patitas de Papel**, en cambio, sí tenía movimiento real desde enero 2026 apenas se agregó — se
+> backfilleó todo el historial con `ingest.py --resumenes --desde 2026-01 --empresa "Editorial Patitas de
+> Papel"` el mismo día que se agregó.
+
+**Actualización automática — ya no hace falta correrla a mano**: hay una tarea de Windows Task Scheduler
+(`SII Dashboard - Actualizar IVA semanal`) que corre **todos los viernes a las 16:00** sin depender de Claude
+ni de ninguna sesión abierta. Detalle completo en la sección 11 (2026-08-28) y en `sii-dashboard/README.md`.
+
+Para forzar una actualización manual fuera de ese horario (p. ej. pedírselo a Claude, o corrit vos mismo):
 ```bash
 cd "C:\Users\brand\Desktop\Claude\sii-dashboard"
-python ingest.py --resumenes --desde 2026-01
+python ingest.py --resumenes --meses 2
 ```
 
 **Comportamiento importante para quien edite esto — `cuadre iva` y `resumenes sii` se REGENERAN COMPLETAS en
@@ -399,6 +472,8 @@ Dashboard financiero/
 
 | Hash      | Mensaje                                                                       |
 |-----------|-------------------------------------------------------------------------------|
+| `f0fec0f` | feat: simplificar Cuadre IVA, agregar vista consolidada y alerta F29         |
+| `61c64ac` | feat: agregar módulo Cuadre IVA (conectado al SII) y quitar Analista IA      |
 | `7f92ec7` | feat: simulador abre por defecto en 15 días (antes 12 meses)                 |
 | `4d16efb` | fix: anticipos se pagan el día 15, no junto a sueldos el día 30              |
 | `1c25568` | feat: quitar módulo Resumen, inicio por defecto en Movimientos               |
@@ -410,15 +485,95 @@ Dashboard financiero/
 | `142bff4` | Consolidar documentacion en un solo .md actualizado                          |
 | `4d9e93a` | Agregar anticipos (2da tabla SUELDOS) y corregir total de nomina             |
 
-> Los commits de esta tabla (hasta `7f92ec7`) están desplegados. El commit `61c64ac` (módulo Cuadre IVA +
-> quitar Analista IA, ver Historial) también está pusheado y en vivo — ver sección 11 para el detalle de cómo
-> se destrabó su despliegue. **La simplificación del módulo Cuadre IVA del 2026-08-18 (ver Historial) todavía
-> NO está commiteada** — vive solo en el `index.html` local. Antes de tocar este módulo de nuevo, correr
-> `git status` para confirmar si sigue así o si ya se subió.
+> **Actualización 2026-10-05:** `HEAD` local = `origin/main` = `f0fec0f`, pero `git status` muestra `index.html` y este `.md` **modificados sin commitear**. El cambio de `index.html` son 3 líneas: se quitó `BICE` (cuenta cerrada el 2026-09-01) de los valores de respaldo `SALDOS_BANCO` y de `DEFAULT_UMBRALES`; los saldos reales vienen del Sheet, así que no cambia el comportamiento visible. El sitio publicado sigue teniendo `BICE` en esos valores de respaldo hasta que se haga push.
+>
+> Todos los commits de esta tabla, incluido `f0fec0f` (simplificación de Cuadre IVA + "Todas las Empresas" +
+> alerta F29), están commiteados y pusheados a `main` — confirmado con `git status` limpio para `index.html`
+> el 2026-08-28. Los cambios posteriores de esa misma sesión (agregar Inversiones Santo Domingo a
+> `sii-dashboard/config.json`, la tarea programada semanal, la simulación para gerencia) **no tocan
+> `index.html`** — viven en `sii-dashboard/` (que no es un repo git) y en `Dashboard financiero/scratch/`
+> (sin commitear a propósito, son entregables puntuales, no código de la app).
 
 ---
 
 ## 11. Historial de Cambios
+
+### 2026-10-15 al 2026-11-04 — Resumen financiero para gerencia, flujo de caja, cruces y conciliación con cartolas
+
+Nuevo proceso de reportes para gerencia, **fuera del `index.html`** (scripts Python + PDF), documentado en la sección 16. Lo principal:
+- **Cruces entre empresas 2026** para el prebalance del contador (`Finanzas Holding/08 - Entregables/Cruces_entre_empresas_del_grupo_2026.xlsx`): 48 documentos Ene–Sep, $559 M neto, verificados venta-vs-compra en el SII.
+- **Flujo de caja a 8 semanas** (`analisis/flujo_caja.py` → `Flujo_Caja_8_Semanas_DD-MM-AAAA.xlsx`) y **cobranza con antigüedad**, leyendo el libro de cobranza de Gloria en OneDrive (fuente oficial desde el 26-10: estados PENDIENTE / FACTORING / FINALIZADO).
+- **Resumen financiero** semanal en PDF (5 páginas: resumen + ventas con/sin cruces, caja y pagos, flujo, cobranza neta de factoring, créditos vs inversiones) y versión **de 1 hoja para jefatura** con pagos al viernes de esta semana y de la siguiente.
+- **Cierre de cruces de octubre** (30-10): plan y seguimiento para dejar GMD en 200–220 M y Grafhika en 82–87 M; cerró en GMD $205,7 M / Grafhika $85,6 M, IVA de octubre del grupo $17,6 M (tras el acuse de Grafhika a las facturas 2967–2968 de GMD).
+- **Verificación de sueldos** de octubre contra los archivos de RRHH (GMD 11 / $6.292.001, Grafhika 16 / $10.682.567, Inversiones 21 / $9.751.101) y TEF de part-time adicionales.
+- **Conciliación de la planilla con las cartolas** (desde 04-11): la cuenta de servicio marca como "Pagado" en las pestañas `Gastos` y `Creditos` lo que aparece cobrado en `Movimientos`. Primera corrida: FOGAPE cuota 7 (fila 20 de Creditos).
+- Hallazgos para gerencia: pagos a proveedores por transferencia fuera de la planilla de cheques (~$50 M en la 2ª quincena de octubre), $1.515 M en fondos mutuos (pestaña `Fondos`) rindiendo ~6,6% mientras se usa factoring a 15–26% anualizado, y crédito nuevo Banco de Chile Grafhika N°2 ($50 M, 36 cuotas de $1.699.748).
+
+### 2026-08-31 — Cuarta empresa (Editorial Patitas de Papel), Inversiones pausada, y ciclo completo real+simulación
+
+**Cuarta empresa agregada**: Editorial Patitas de Papel, RUT `78204998-4`, mismo certificado que Grafhika.
+A diferencia de Inversiones Santo Domingo, **esta sí tenía actividad real** — se backfilleó todo el
+historial desde enero 2026 (`ingest.py --resumenes --desde 2026-01 --empresa "Editorial Patitas de Papel"`),
+33 documentos guardados, publicado sin problemas. Se actualizó también `CONTEXTO_EMPRESA.md` (sección 1,
+tabla de entidades) agregándola con nombre corto `EPP`.
+
+**Inversiones Santo Domingo pasó a `"activa": false`** en `config.json` — seguía rechazando `getResumen`
+con `codRespuesta=3` en cada corrida, y como el script se niega a publicar el cuadre de IVA de nadie si
+UNA empresa falla ("un cuadre parcial parece confiable y no lo es"), bloqueaba la actualización de Grafhika
+y GMD también. Con `activa: false` se salta al consultar el SII sin tocar su config guardada — se reactiva
+sacando ese flag cuando empiece a facturar.
+
+**Primer ciclo completo real → simulación → factura real → reconciliación**, en la misma sesión:
+1. Se corrió la actualización semanal manual (agosto ya con datos frescos).
+2. Se regeneró la simulación de Cuadre IVA para gerencia (ver sección 15) con esos números.
+3. El usuario subió 3 PDFs de facturas reales ya emitidas (Grafhika → GMD, folios 140/141/142,
+   $76.911.730 neto) — el SII las reconoció en la siguiente corrida de `ingest.py` (mismo día), así que ese
+   cruce pasó de "Simulado" a "Real" en el documento sin que hiciera falta ningún ajuste manual de datos,
+   solo actualizar el detalle de facturas con los folios reales.
+4. El usuario corrigió una doble contabilización: los "$60.000.000 de venta externa nueva" que se habían
+   supuesto para GMD ya estaban incluidos en su facturación real (se había cerrado ese número), así que ese
+   supuesto se sacó del modelo. El IVA determinado del grupo bajó de $41.871.180 a **$30.471.180** con esa
+   corrección — una diferencia real de $11,4M causada por contar el mismo ingreso dos veces.
+
+**Lección para la próxima corrida**: antes de sumar un "supuesto de venta externa nueva" a una empresa,
+preguntar explícitamente si ese monto ya quedó reflejado en la facturación real más reciente, en vez de
+asumir que sigue pendiente — la facturación real puede cerrarse entre una actualización y la siguiente sin
+que el usuario lo mencione a menos que se le pregunte.
+
+### 2026-08-28 — Tercera empresa (Inversiones Santo Domingo), automatización semanal y simulación mensual para gerencia
+
+**Tercera empresa agregada a `sii-dashboard/config.json`**: Inversiones Santo Domingo, RUT `78402779-1`,
+usando el mismo certificado que Grafhika SpA (`Certificado ecert brandon.pfx`, autorizado para ambos RUT en
+el SII). Verificado con `--probar-token` (autenticación OK), pero `--resumenes --desde 2026-01` no trajo
+ningún documento — el SII rechaza `getResumen` con `codRespuesta=3` en todos los períodos, indicando que esa
+empresa no tiene actividad real en el RCV todavía (no es un error de configuración). El dashboard va a
+mostrarla igual apenas tenga datos reales — `CuadreIvaPage` arma el selector de empresas dinámicamente desde
+`CUADRE_IVA_DATA`, así que no hizo falta ningún cambio en `index.html`.
+
+**Automatización semanal (Windows Task Scheduler)**: se armó porque las rutinas "Programado" de Claude
+(`claude.ai/code/routines`) corren en la nube y no tienen forma de acceder al certificado digital ni al
+`.env` local — la única opción real para algo que depende de credenciales locales es un scheduler local.
+Tarea `SII Dashboard - Actualizar IVA semanal`, todos los viernes 16:00, corre
+`sii-dashboard/actualizar_semanal.bat` (que a su vez corre `ingest.py --resumenes --meses 2` y loguea cada
+corrida en `sii-dashboard/logs/actualizacion.log`). Se probó manualmente con `Start-ScheduledTask` antes de
+dejarla — corrió igual que a mano, autenticó ambos certificados y publicó sin intervención. Se puede
+disparar fuera de horario desde el Programador de tareas de Windows (`taskschd.msc` → buscar la tarea →
+clic derecho → Ejecutar) o pidiéndoselo a Claude directamente.
+
+**`GUIA_CONEXION_SII.md`** (en `sii-dashboard/`): guía técnica para un compañero que quiere conectar su
+propio dashboard al RCV del SII (getSeed/firma XML-DSig/getToken, endpoints de `getResumen`/detalle, reglas
+de negocio aprendidas). No comparte credenciales ni el `config.json`/`.pfx` de este proyecto, solo el
+protocolo y el código de `sii/auth.py`/`sii/rcv.py` como referencia.
+
+**Simulación mensual de Cuadre IVA para gerencia**: gerencia pidió un escenario hipotético de facturación
+cruzada entre las 3 empresas (quién le vende a quién y por cuánto, sumado a lo real del mes) para evaluar
+distintas repartos de facturación antes de que existan como documentos reales. Se armó un flujo repetible —
+ver sección 15 para el procedimiento paso a paso. La primera corrida (agosto 2026) quedó como PDF apaisado
+(`Dashboard financiero/scratch/Simulacion_Cuadre_IVA.pdf`, generado desde
+`Dashboard financiero/scratch/simulacion_cuadre_iva.html` con Chrome headless) — ninguno de los dos está
+commiteado a propósito, son entregables puntuales de ese mes, no una plantilla que viva en el repo.
+
+---
 
 ### 2026-08-18 (4) — Alerta de vencimiento F29 (IVA) en la barra superior
 
@@ -643,13 +798,18 @@ todavía se ve la versión con tabs y KPIs, hasta que se commitee y pushee este 
 
 | # | Prioridad | Estado | Descripción |
 |---|-----------|--------|-------------|
-| 1 | **CRÍTICO** | Bloqueado | Regla Firestore `shared_data` no existe → carga de cobranza no persiste entre recargas ni cuentas. Solución: agregar regla en Firebase Console (ver sección 7). |
-| 2 | Media | Sin investigar | Usuario reportó: "cuando subo la cartola de BCI no está actualizando en el VPS". Requiere aclaración: ¿dónde se sube el archivo? ¿qué proceso lo consume? ¿hay mensaje de error visible? ¿hay acceso SSH al VPS? |
+| 1 | **CRÍTICO** | Bloqueado | Regla Firestore `shared_data` no existe → carga de cobranza no persiste entre recargas ni cuentas. Verificado de nuevo el 2026-10-05: `GET .../shared_data/cobranza` sin autenticación devuelve `403`. Solución: agregar regla en Firebase Console (ver sección 7). |
+| 2 | — | ✅ **RESUELTO** | ~~"Cuando subo la cartola de BCI no está actualizando en el VPS"~~ — el flujo de cartolas manuales por Taildrop (BCI, Santander, Inversiones Santo Domingo, Scotiabank) se investigó y arregló en el VPS; BCI se procesa y llega al Sheet (verificado jul–oct 2026). Detalle en `OPENCLAW_VPS_2026-06-16.md`. |
 | 3 | Baja | Pendiente | Remote URL del repo local en minúsculas funciona por redirect. Para normalizar: `git remote set-url origin https://github.com/brands-chile-afk/Dashboard-financiero.git`. |
 | 4 | Baja | Opcional | **Nivel 2 de rendimiento (pre-compilar Babel):** quitar Babel del navegador compilando el JSX una sola vez bajaría la carga de ~6.5s a ~2s. Contra: cada edición futura pasa por un paso de compilación (idealmente vía GitHub Action). Ver sección 14. |
 | ~~5~~ | ~~Baja~~ | ✅ **RESUELTO** | ~~Timeout recurrente `saveConfigToCloud`~~ — era síntoma del bucle infinito de Firebase, resuelto el 2026-06-18 (commit `2b96dd5`). |
 | 6 | Media | Pendiente | `Facturas`/`compras` (detalle documento por documento) solo tienen **julio 2026** cargado — el resto del año solo está en el agregado (`cuadre iva`/`resumenes sii`). Correr `ingest.py --desde 2026-01` (sin `--resumenes`) desde `sii-dashboard` cuando se necesite el detalle completo. |
 | 7 | Baja | Sin investigar | Hay archivos sueltos sin trackear en el repo que **no vienen de este proyecto**: `SII/Envy.txt` (vacío), `add_admin.html`, `scratch_firebase_test.js`, `test_compat.js`, `test_sdk.js`, `test_write.html`. Preexistentes, no se tocaron ni se incluyeron en ningún commit — confirmar con el usuario si sirven para algo antes de borrarlos. |
+| 8 | Media | Sin investigar | Consola muestra `Error fetching completed tasks: FirebaseError: Missing or insufficient permissions` (viene de `GastosFijosCard`, ~línea 1378, colección `completed_tasks`). Mismo tipo de problema que el issue #1 (`shared_data`) — probablemente falta la regla de Firestore para esa colección también. Encontrado en la revisión general del 2026-08-24, no investigado a fondo todavía. |
+| 10 | — | ✅ **RESUELTO (2026-11-04)** | ~~GIDs desactualizados de `cuadre iva` y `resumenes sii`~~ — `index.html` ahora usa `228591312` y `1806234904` (las pestañas se habían recreado). Sigue pendiente: la pestaña `Facturas` (GID `602912984`) ya no existe en la planilla; el módulo Ventas depende de la carga manual del Excel. |
+| 11 | Media | Pendiente | Pestaña `Creditos`: el crédito Banco de Chile Grafhika N°2 ($50 M) está cargado desde la cuota 4; faltan las cuotas 1–3 (pagadas). FOGAIN y FOGAPE tienen 24 cuotas que suman la mitad del monto: pedir tablas de desarrollo. |
+| 12 | Media | Pendiente | En `Movimientos`, los saldos de Scotiabank, BCI e Inversiones Santo Domingo no siempre están al día (ISD sin movimientos desde el 01-09). Confirmar saldos con Brandon antes de usarlos en un informe. |
+| 9 | — | ✅ **YA NO APLICA** | ~~Inversiones Santo Domingo sin actividad en el RCV~~ — la empresa está activa y tiene datos reales desde septiembre 2026 (ver sección 2). |
 
 ---
 
@@ -679,3 +839,121 @@ todavía se ve la versión con tabs y KPIs, hasta que se commitee y pushee este 
 
 ### Nivel 2 pendiente (opcional, el salto grande de carga)
 Pre-compilar el JSX una sola vez (quitar Babel del navegador) bajaría la carga de ~6.5 s a **~2 s**. Implica un paso de compilación antes de publicar — idealmente una **GitHub Action** que compile en cada push para no cambiar el flujo de edición. Ver issue #4.
+
+---
+
+## 15. Simulación Mensual de Cuadre IVA para Gerencia
+
+Gerencia pide, mes a mes, un escenario hipotético de facturación cruzada entre Grafhika SpA, GMD e
+Inversiones Santo Domingo para evaluar reparto de facturación **antes** de que existan documentos reales.
+Esto no es parte del dashboard ni de `sii-dashboard` — es un procedimiento manual (con ayuda de Claude) que
+se repite cada mes. Documentado acá para no tener que re-derivar el proceso cada vez.
+
+### Paso 1 — Traer el real del mes
+
+Correr la actualización si no corrió sola todavía (ver sección 2 — la tarea semanal de los viernes 16:00
+normalmente ya la tiene al día):
+```bash
+cd "C:\Users\brand\Desktop\Claude\sii-dashboard"
+python ingest.py --resumenes --meses 2
+```
+
+### Paso 2 — Consultar la facturación real del mes por empresa
+
+El resumen que imprime `ingest.py` alcanza para la mayoría de los casos. Si hace falta el detalle
+ventas/compras neto por separado, consultar directo `sii.db`:
+```python
+import sqlite3
+con = sqlite3.connect('sii.db')
+cur = con.cursor()
+cur.execute('''
+  SELECT empresa, periodo, operacion, SUM(monto_neto) neto, SUM(iva_recuperable) iva, SUM(documentos) docs
+  FROM resumenes
+  WHERE estado_contab='REGISTRO' AND periodo = ?
+  GROUP BY empresa, periodo, operacion
+  ORDER BY empresa, operacion
+''', ('202608',))  # AAAAMM del mes a simular
+for row in cur.fetchall(): print(row)
+```
+(Tabla `resumenes`, no `documentos` — esa segunda es de una carga de detalle completo vieja y no se
+mantiene al día. Ver sección 2 del historial 2026-08-28 si esto cambia.)
+
+### Paso 3 — Definir el escenario con el usuario
+
+Esto varía cada mes, no hay que asumirlo. Preguntar (o confirmar si ya lo dio):
+- **Objetivo de venta neta total** por empresa (incluye o no los cruces — aclarar).
+- **Quién le factura a quién** — la dirección de los cruces cambia mes a mes según lo que gerencia quiera
+  evaluar.
+- **Cómo repartir** un monto cuando una empresa le vende a dos o más otras (monto exacto, % fijo, u otro
+  criterio).
+- Si hay ventas **externas nuevas** planeadas (ej. "mañana facturamos X más") además de los cruces.
+
+Reconciliar siempre contra el real del Paso 2: el total de cada empresa = real + delta simulado. Nunca
+inventar el total desde cero — dejarlo trazable a lo real más lo que se agrega.
+
+### Paso 4 — Calcular el cuadre
+
+IVA = 19% sobre neto. Por empresa:
+- **IVA débito** = 19% × ventas netas totales (real + delta, incluidos los cruces salientes).
+- **IVA crédito** = 19% × compras netas (= cruces entrantes recibidos de las otras empresas del grupo, salvo
+  que el escenario incluya compras a terceros — no asumirlo, preguntar).
+- **IVA determinado** = débito − crédito. Positivo es "A pagar", negativo es "Remanente".
+
+Los cruces intercompañía **nunca reducen el IVA total del grupo** — solo redistribuyen cuánto paga cada
+empresa. Vale la pena decirlo explícito en la entrega, gerencia lo pregunta seguido.
+
+### Paso 5 — Armar el documento para gerencia
+
+Plantilla de referencia (no es parte del repo, se edita cada vez): copiar el HTML de la última corrida en
+`Dashboard financiero/scratch/simulacion_cuadre_iva.html`, actualizar cifras y el período, y republicar como
+Artifact (`mcp` Artifact tool). Estructura del documento: banner de advertencia "esto es una proyección, no
+un resultado del SII", KPIs del grupo, tabla de origen de la facturación (real vs. delta), mapa de cruces, el
+cuadre de IVA final, y los supuestos del mes al pie (para que quede trazable qué se decidió).
+
+**Paleta y tipografía ya definidas** (no rediseñar de cero cada mes): fondo blanco, verde vivo `#0F9D5C`
+para lo real/positivo, naranjo vivo `#F0650F` para lo simulado, tipografía Libre Franklin (títulos) + IBM
+Plex Sans (cuerpo) + IBM Plex Mono (números, tabular). Ambos temas (claro/oscuro) ya están resueltos en el
+archivo existente.
+
+### Paso 6 — Exportar a PDF
+
+El artifact publicado sirve para verlo o compartir el link, pero para adjuntar a un mail conviene el PDF.
+Se genera con Chrome headless (ya tiene estilos de impresión en horizontal para que entren las tablas
+anchas sin cortarse):
+```bash
+"C:\Users\brand\AppData\Local\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf="C:\Users\brand\Desktop\Claude\Dashboard financiero\scratch\Simulacion_Cuadre_IVA.pdf" --print-to-pdf-no-header "file:///C:/Users/brand/Desktop/Claude/Dashboard financiero/scratch/simulacion_cuadre_iva.html"
+```
+Revisar el PDF generado (leerlo) antes de mandarlo — si se agregan columnas nuevas a alguna tabla, puede
+volver a cortarse y hay que ajustar el CSS de `@media print` en el HTML.
+
+
+---
+
+## 16. Resumen Financiero para Gerencia (proceso semanal)
+
+Se genera a pedido ("actualiza el resumen"). No es parte del dashboard web: son scripts Python que producen PDF/Excel.
+
+### Fuentes
+| Dato | Fuente |
+|---|---|
+| Ventas, IVA, cruces | SII vía `sii-dashboard` (`ingest.py --resumenes --sin-sheets` + detalle `--periodo AAAA-MM --solo ventas`) |
+| Cobranza, factoring | **Libro de cobranza de Gloria** (OneDrive): `Grafhika Contabilidad\...\Grafhika Gloria\Libro Venta - GMD6 LIBRO VENTA GMD - COBRANZA_ original.xlsx`, hoja `FACTURAS 2026`. Es archivo "solo en la nube": **iniciar OneDrive antes** (`%LOCALAPPDATA%\Microsoft\OneDrive\OneDrive.exe /background`) |
+| Saldos y movimientos bancarios | Pestaña `Movimientos` (saldos en columnas H–I). Leer en vivo con la cuenta de servicio: el CSV publicado puede venir atrasado |
+| Cheques, créditos, gastos fijos, fondos | Pestañas `Gastos`, `Creditos`, `GASTOS_FIJOS`, `Fondos` |
+| Sueldos | Archivos de RRHH del mes (no la pestaña `SUELDOS`, que es solo referencia) |
+
+### Pasos
+1. Iniciar OneDrive y correr `analisis/cobranza_base.py AAAA-MM-DD`.
+2. Refrescar el SII del mes en curso y el anterior.
+3. **Conciliar la planilla con las cartolas** y marcar "Pagado" en `Gastos` y `Creditos` lo que esté cobrado (regla: mismo monto, cobrado en su fecha o después, sin reutilizar un cobro ya asignado; si es ambiguo, preguntar).
+4. Actualizar supuestos y saldo en `analisis/flujo_caja.py`, recalcular el Excel con Excel (COM) y exportar `flujo_valores.json`.
+5. Generar el PDF: páginas 1–2 y 5 (`scratch/gen_resumen_DDMM.py`), 3–4 (`analisis/gen_flujo_pdf.py`), unir con `scratch/unir_resumen_flujo.py` e imprimir con Chrome headless. Versión de 1 hoja para jefatura: `scratch/gen_pagos_1hoja.py`.
+6. Nombrar con la fecha de corte: `Resumen_Financiero_DD-MM-AAAA.pdf`, `Flujo_Caja_8_Semanas_DD-MM-AAAA.xlsx`.
+
+### Contenido que siempre debe estar (pedidos de Brian Villarroel, 26-10)
+- Ventas totales, **cruces entre empresas** y ventas reales a terceros.
+- Cobranza **descontando lo cedido a factoring** (qué falta cobrar que aún no entró a caja).
+- **Cuotas de créditos vs inversiones** (fondos mutuos de la pestaña `Fondos`).
+
+### Cierre de mes: cruces entre empresas
+El último día hábil se emiten los cruces para dejar las ventas en el rango que fije Brandon (oct-2026: GMD 200–220 M, Grafhika 82–87 M). Esquema usado: Grafhika → GMD, GMD → Grafhika, Grafhika ↔ Inversiones (~$8,6 M por lado). Los cruces no cambian el IVA total del grupo, solo cuánto paga cada empresa. **Cada receptor debe acusar recibo en sii.cl dentro del mes** o su IVA crédito no cuenta. Script de referencia: `scratch/gen_cruces_3010_final.py`.
