@@ -6,8 +6,7 @@ DRY = "--dry" in sys.argv
 hoy = datetime.date.today()
 movs = []
 import subprocess
-TRACKED = set(subprocess.run(["git", "ls-files"], cwd=BASE, capture_output=True, text=True).stdout.split("
-"))  # no mover lo que está en GitHub
+TRACKED = set(subprocess.run(["git", "ls-files"], cwd=BASE, capture_output=True, text=True).stdout.splitlines())  # no mover lo que está en GitHub
 
 def mes_de(nombre, ruta):
     m = re.search(r"(\d{2})-(\d{2})-(2026)", nombre)
