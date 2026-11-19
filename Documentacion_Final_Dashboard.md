@@ -2,7 +2,7 @@
 
 Documento único y actualizado con la arquitectura, configuración, módulos, historial de cambios y roadmap del Dashboard Financiero. **Para una sesión nueva (Claude Cowork, otro chat, celular) empezar por la sección 0.**
 
-> Última actualización: 2026-11-04
+> Última actualización: 2026-11-09
 
 ---
 
@@ -945,10 +945,32 @@ Se genera a pedido ("actualiza el resumen"). No es parte del dashboard web: son 
 ### Pasos
 1. Iniciar OneDrive y correr `analisis/cobranza_base.py AAAA-MM-DD`.
 2. Refrescar el SII del mes en curso y el anterior.
-3. **Conciliar la planilla con las cartolas** y marcar "Pagado" en `Gastos` y `Creditos` lo que esté cobrado (regla: mismo monto, cobrado en su fecha o después, sin reutilizar un cobro ya asignado; si es ambiguo, preguntar).
-4. Actualizar supuestos y saldo en `analisis/flujo_caja.py`, recalcular el Excel con Excel (COM) y exportar `flujo_valores.json`.
-5. Generar el PDF: páginas 1–2 y 5 (`scratch/gen_resumen_DDMM.py`), 3–4 (`analisis/gen_flujo_pdf.py`), unir con `scratch/unir_resumen_flujo.py` e imprimir con Chrome headless. Versión de 1 hoja para jefatura: `scratch/gen_pagos_1hoja.py`.
-6. Nombrar con la fecha de corte: `Resumen_Financiero_DD-MM-AAAA.pdf`, `Flujo_Caja_8_Semanas_DD-MM-AAAA.xlsx`.
+3. Leer la planilla en vivo (cuenta de servicio) y guardarla en `analisis/datos_DDMM/planilla.json`.
+4. **Conciliar la planilla con las cartolas** y marcar "Pagado" en `Gastos` y `Creditos` lo que esté cobrado (regla: mismo monto, cobrado en su fecha o después, sin reutilizar un cobro ya asignado; si el monto no calza o es ambiguo, **no marcar y preguntar**). Informar siempre qué filas se cambiaron.
+5. Actualizar supuestos y saldo en `analisis/flujo_caja.py` (lee cheques y cuotas desde `datos_DDMM/planilla.json`; lo vencido y aún no cobrado se pasa a hoy), recalcular el Excel con Excel (COM) y exportar `flujo_valores.json`.
+6. Generar:
+   - **Resumen** (3 páginas: resumen, detalle de caja y pagos del mes, créditos vs inversiones): `scratch/gen_resumen_DDMM.py` (último: `gen_resumen_0911.py`) + `scratch/unir_resumen_sinflujo.py DDMM`.
+   - **Hoja de pagos para jefatura** (1 página, semana en curso y la siguiente): `scratch/gen_pagos_semanas.py AAAA-MM-DD HH:MM`. Lee el Excel del flujo y la planilla, e incluye un recuadro con lo **realmente pagado por transferencia** en la semana según la cartola.
+   - Unir resumen + hoja de pagos en **un solo PDF**: `scratch/Resumen_y_Pagos_DD-MM-AAAA.pdf` (es lo único que se envía).
+   - **Flujo de caja**: se actualiza igual (`analisis/gen_flujo_pdf.py` → `scratch/Flujo_Caja_DD-MM-AAAA.pdf` y `analisis/Flujo_Caja_8_Semanas_DD-MM-AAAA.xlsx`), pero **solo se entrega cuando Brandon lo pide**.
+7. **Cheques y cuotas siempre desde la planilla**, nunca escritos a mano en los scripts (el 05-11 un cheque ya pagado quedó como pendiente por eso).
+
+### Orden de carpetas (desde el 19-11)
+- `scratch\` y `analisis\` dejan a la vista solo los scripts base y lo del último día. Lo diario anterior (PDF, HTML, `gen_resumen_DDMM.py`, respaldos `flujo_caja_DDMM.py`, Excel con fecha y fotos `datos_DDMM\` de la planilla) se mueve a `historico\AAAA-MM\` (`analisis\historico\fotos_planilla\` para las fotos) con `python ordenar_archivos.py` (`--dry` para simular). No borra nada y deja un registro `historico\movimientos_AAAA-MM-DD.csv`. No mueve archivos que están en GitHub.
+- `.gitignore` excluye `analisis\`, `docs_claude\`, `scratch\historico\` y los generadores y salidas del resumen: los datos internos del holding nunca se suben.
+
+### Migrar a otro PC o a la nube
+Ver **`MIGRACION_Resumen_Financiero.md`** (dependencias, credenciales y dónde están, pasos para otro PC, opciones de nube). Copia de la memoria de Claude y del prompt de la tarea diaria en `docs_claude\` (no subir a GitHub: tiene datos internos).
+
+### Envío automático diario (definido el 11-11)
+- **Cuándo:** lunes a viernes a las **11:00**, como tarea programada de la app de Claude en el PC de Brandon (`C:\Users\brand\.claude\scheduled-tasks\`). Corre solo si la app está abierta; si está cerrada, corre al abrirla.
+- **Qué hace:** la actualización completa de esta sección (OneDrive, libro de cobranza, SII, planilla, conciliación, flujo, resumen + hoja de pagos) y envía **un correo desde el Gmail de Brandon** con el PDF `Resumen_y_Pagos_DD-MM-AAAA.pdf` adjunto y un resumen corto en el cuerpo (caja hoy, caja al viernes y al viernes siguiente, qué cambió).
+- **Tarea:** `resumen-financiero-holding-diario` (`C:\Users\brand\.claude\scheduled-tasks\resumen-financiero-holding-diario\SKILL.md`). Para recalcular el Excel del flujo usa `analisis/recalc_flujo.ps1`.
+- **Destinatarios:** brandon.villarroelcl@gmail.com, brian.villarroel@gmd.cl y jorge.villarroel@gmd.cl.
+- **Hilo único:** asunto fijo **"Resumen financiero holding"** (la fecha va en la primera línea del cuerpo y en el nombre del PDF). El primer envío crea el hilo y guarda su `threadId` en `scratch/correo_hilo.json`; los siguientes responden en ese hilo. Para empezar un hilo nuevo basta con borrar ese archivo.
+- **Planilla:** en automático solo se marca "Pagado" lo que calza exacto (mismo monto, cobrado en su fecha o después, sin reutilizar un cobro). Lo dudoso no se marca: se anota en el correo para que Brandon lo revise.
+- **No se envía** si algo falla (OneDrive, planilla, SII o un PDF que no cuadra): en ese caso llega solo un aviso a Brandon con el error.
+- **WhatsApp:** no hay conexión directa. Si se quiere, la vía es el n8n del VPS (WhatsApp Business API o Twilio) tomando el PDF del correo o de una carpeta; pendiente.
 
 ### Contenido que siempre debe estar (pedidos de Brian Villarroel, 26-10)
 - Ventas totales, **cruces entre empresas** y ventas reales a terceros.
@@ -957,3 +979,44 @@ Se genera a pedido ("actualiza el resumen"). No es parte del dashboard web: son 
 
 ### Cierre de mes: cruces entre empresas
 El último día hábil se emiten los cruces para dejar las ventas en el rango que fije Brandon (oct-2026: GMD 200–220 M, Grafhika 82–87 M). Esquema usado: Grafhika → GMD, GMD → Grafhika, Grafhika ↔ Inversiones (~$8,6 M por lado). Los cruces no cambian el IVA total del grupo, solo cuánto paga cada empresa. **Cada receptor debe acusar recibo en sii.cl dentro del mes** o su IVA crédito no cuenta. Script de referencia: `scratch/gen_cruces_3010_final.py`.
+
+---
+
+## 17. Análisis de gastos desde las cartolas (carpeta 2026_CAD)
+
+Análisis de todo lo que salió de los bancos ene–oct 2026 y proyección mensual de gasto (nov-2026 a mar-2027). Se hace a pedido. La idea es que reemplace la estimación de proveedores del flujo (compras SII − cheques) por datos reales.
+
+### Fuente
+Carpeta compartida **2026_CAD** en OneDrive (agregada a "Mis archivos" el 09-11): `C:\Users\brand\OneDrive\G M D`, `...\I M P R E S O R E S` e `...\INV STO DOMINGO`. Tiene cartolas mensuales en Excel y/o PDF por banco, más tablas de amortización (Scotiabank, y FOGAIN/FOGAPE en la carpeta de Santander).
+
+| Empresa | Cuentas y cobertura |
+|---|---|
+| GMD | Banco de Chile y Santander ene–oct (Excel); Scotiabank ene–ago (Excel) + sep–oct desde la planilla `Movimientos`; BICE solo tiene comisiones (se ignora) |
+| Grafhika | Banco de Chile 1697519307: Excel ene–abr y jun–jul; **PDF** may, ago, sep y oct. La cuenta vista 52224318 no se incluye (montos menores, PDF con otro formato) |
+| Inversiones Santo Domingo | Cuenta vista may–jun (Excel); cuenta corriente 00-0164-45888-03 jun (Excel) y jul–oct (PDF) |
+| Editorial (BCI) | No está en la carpeta |
+
+### Scripts (en `analisis/`)
+1. Copiar la carpeta a `analisis/cartolas_2026/` (al leerla, OneDrive descarga los archivos).
+2. `cartolas_leer.py`: lector único de Excel. Detecta la fila de encabezado y las columnas Fecha/Descripción/Cargos/Abonos (o Monto + Cargo/Abono); prefiere la hoja con `TIPO_CTA` cuando existe.
+3. `cartolas_pdf.py`: lector de PDF de Banco de Chile. Infiere el signo por la descripción y lo corrige con el **saldo impreso al cierre de cada día**; cada PDF debe cuadrar exacto con su `SALDO FINAL`.
+4. `cartolas_base.py` → `cartolas_base.pkl` (deduplica los solapes entre archivos de la misma cuenta).
+5. `cartolas_clasificar.py` → `cartolas_clasif.pkl` (categorías por reglas de texto + lista de trabajadores de la pestaña `SUELDOS`).
+6. `cartolas_analisis.py` → `Analisis_Gastos_2026.xlsx` (hojas Proyeccion, Egresos por categoria, Proveedores, Movimientos y Notas) y `gastos_resumen.json`.
+7. `scratch/gen_gastos_pdf.py` → `scratch/Gastos_2026_y_Proyeccion.pdf` (2 páginas, horizontal).
+
+### Reglas de clasificación (validadas con Brandon el 09-11)
+- **No son gasto** (se muestran aparte): traspasos entre cuentas y empresas del grupo (incluye Grafhika Copy Center), inversiones en fondos mutuos y depósitos, prepagos de créditos ("Pago Total Crédito Consumo", feb–mar), la **compra de un departamento para la empresa** (jun, $200 M) y préstamos a personas.
+- **Cheques**: el proveedor se identifica con la pestaña `Gastos` (monto exacto, cobro entre −3 y +45 días); antes de marzo no hay registro.
+- **Familia Villarroel** (no todo es "retiro"):
+  - Brian: sueldo fijo a inicio de mes → remuneraciones; cuota del crédito Chevrolet → cuotas de créditos; **paga todos los impuestos de GMD** (F29 cerca del día 20–23, TGR y renta) → impuestos.
+  - Brandon: sueldo fijo a inicio de mes → remuneraciones; **paga los impuestos de Grafhika** (F29, TGR y renta) → impuestos; el resto son **reembolsos de compras de la empresa hechas con su tarjeta** → tarjetas de crédito.
+  - Leonardo: sueldo + comisiones → remuneraciones (excepto un préstamo de $25 M en jun–jul).
+  - Yerko y Eric: sueldo → remuneraciones.
+  - Jorge: **retiros** → se muestran aparte, fuera del gasto.
+  - Lo que no calza con lo anterior queda como "Personas relacionadas" (~$100 M en el año, por aclarar).
+- **El F29 no sale de las cuentas de las empresas**: se paga vía Brian (GMD) y Brandon (Grafhika). El IVA a pagar del SII sirve para validar (promedio ~$15 M/mes, igual a lo transferido).
+- En el PDF no se nombra a la familia: sus sueldos van dentro de remuneraciones y los retiros y préstamos no aparecen.
+
+### Resultado al 09-11 (promedio may–oct, millones de $ al mes)
+Remuneraciones 61,4 · Previred 13,6 (15,6 desde julio) · Proveedores 89,3 · Tarjetas 8,5 · Impuestos 15,0 · TGR 4,4 · Cuotas de créditos 25,4 · Línea, bancos y factoring 10,5 → **gasto ~$228 M/mes**; proyección nov–mar ~$230 M. Cobranza + factoring ~$195,5 M/mes → **déficit ~$33 M/mes** (sin contar retiros), cubierto con rescates de fondos mutuos. El impuesto a la renta se paga una vez al año (jun-2026, ~$21 M).

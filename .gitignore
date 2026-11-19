@@ -2,3 +2,23 @@ node_modules/
 *.xlsx
 .env
 .DS_Store
+
+# --- Datos internos del holding: nunca subir (2026-11-19) ---
+analisis/
+docs_claude/
+SII/
+PowerBI/
+.claude/
+add_admin.html
+scratch/historico/
+scratch/*.pdf
+scratch/*.html
+scratch/*.json
+scratch/*.css
+scratch/gen_resumen_*.py
+scratch/gen_pagos_*.py
+scratch/gen_gastos_pdf.py
+scratch/gen_remu_*.py
+scratch/gen_cruces_*.py
+scratch/unir_resumen_*.py
+scratch/mk*.py
