@@ -61,8 +61,9 @@ if not DRY:
     for c in ("scratch", "analisis"):
         reg = os.path.join(BASE, c, "historico", f"movimientos_{hoy}.csv")
         if any(m[0] == c for m in movs):
-            with open(reg, "w", newline="", encoding="utf-8") as fh:
-                csv.writer(fh).writerows([("carpeta", "archivo", "nuevo_lugar")] + [m for m in movs if m[0] == c])
+            nuevo = not os.path.exists(reg)
+            with open(reg, "a", newline="", encoding="utf-8") as fh:
+                csv.writer(fh).writerows(([("carpeta", "archivo", "nuevo_lugar")] if nuevo else []) + [m for m in movs if m[0] == c])
 print(("[simulación] " if DRY else "") + f"{len(movs)} archivos/carpetas movidos")
 for c in ("scratch", "analisis"):
     print(c, "→", sum(1 for m in movs if m[0] == c))
